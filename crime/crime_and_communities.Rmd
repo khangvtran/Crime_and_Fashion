@@ -6,9 +6,9 @@ output:
 ---
 
 
-**Group Member 1 Name: **_______________   **Group Member 1 SID: **_______________
+**Group Member 1 Name: **Khang V. Tran  **Group Member 1 SID: **25181590
 
-**Group Member 2 Name: **_______________   **Group Member 2 SID: **_______________
+**Group Member 2 Name: **Christian Philip Hoeck   **Group Member 2 SID: **_______________
 
 The crime and communities dataset contains crime data from communities in the United States. The data combines socio-economic data from the 1990 US Census, law enforcement data from the 1990 US LEMAS survey, and crime data from the 1995 FBI UCR. More details can be found at https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized.
 
@@ -16,9 +16,9 @@ The dataset contains 125 columns total; $p=124$ predictive and 1 target (Violent
 
 Once downloaded (from bCourses), the data can be loaded as follows.
 
-```{r}
+```{r, message=FALSE, warning = FALSE}
 library(readr)
-CC <- read_csv("crime_and_communities_data.csv")
+CC <- read_csv("../data_files/crime_and_communities_data.csv")
 print(dim(CC))
 y <- CC$ViolentCrimesPerPop
 X <- subset(CC, select = -c(ViolentCrimesPerPop))
@@ -37,8 +37,101 @@ In this section, you should provide a thorough exploration of the features of th
 
 **YOUR CODE GOES HERE**
 
+\newpage
+
+```{r, echo = FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+```
+
+## Examine Categorical vs. Quantitative data
+Let's look at the structure of the data
+```{r}
+str(X)
+```
+
+\newpage
+
+The structure of the data is partialy ommited due to the high number of features. Let's try getting the class of each feature
+```{r}
+apply(X = X, MARGIN = 2, FUN = class)
+```
+
+Neither str() nor apply(class) shows any factor. Just to be certain, I examine the documentation from the source (UC Irvine): https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized
+
+There exist in the original data the feature of states, county code, and community code, which are catergorical. However, they are not included in the given data. On the other hads, all other quantitative features in the original data are. We can say that the data set is entirely quantitative.
+
+\newpage
+
+## Summary Statistics 
+
+```{r}
+summary(X)
+```
+
+
+## Visualization
+
+Due to such as massive number of feature, there is no way to visualize data from every feature without dimentionality reduction. In the next coming graphs, we only examine some groups of feature that will hopefully tell us something about the data.
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+```
+
+
+```{r, echo = FALSE}
+employment_parents <- X %>% select(matches("Empl|Par")) %>% mutate(CrimeRate = y)
+
+# ggplot(data = employment_parents) + 
+#   geom_point(aes(x = PctUnemployed, y = CrimeRate, color = PctKids2Par)) +
+#   scale_color_gradient(low = "red", high = "white") + 
+#   ggtitle("Crime Rate with respect to Unemployment rate and Single Parent Family Rate")
+
+ggplot(data = employment_parents) + 
+  geom_point(aes(x = PctUnemployed, color = CrimeRate, y = 1/PctKids2Par)) +
+  scale_color_gradient(low = "pink", high = "black") + 
+  xlab("Unemployment Rate") +
+  ylab("Single Parent Househole Rate") +
+  ggtitle("Crime Rate with respect to Unemployment rate and Single Parent Family Rate")
+
+```
+
+```{r}
+
+```
+
+
+\newpage
+
+## Missing Data Processing
+
+check if target y contains missing data
+```{r}
+any(is.na(y))
+```
+
+check if any of the features contains missing data
+```{r}
+any(is.na(X))
+```
+
+Now that we have detected there is NA in some the features, we decide to replace it by the median of other existing data in that corresponding feature
+```{r}
+X <- X %>% mutate_all(function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x))
+any(is.na(X))
+```
+
+## Data Normalization - Scaling
+
+After the previous step of examination, it is obvious that many features are different in nature. For example, some feautures are Percentage (PctForeignBorn, PctBornSameState). Some are counts (NumInShelters, population). Some are in US Dollars (MedRent, ...). Each of the features have different range, scale, and unit. Such condition will affect how much each of the feature influence the predition later on .Therefore, it is highly crucial that we normalize the features.
+
+```{r}
+X <- scale(X)
+```
+
 # Regression task
 
 In this section, you should use the techniques learned in class to develop a model to predict ViolentCrimesPerPop using the 124 features (or some subset of them) stored in $\mathbf{X}$. Remember that you should try several different methods, and use model selection methods to determine which model is best. You should also be sure to keep a held-out test set to evaluate the performance of your model.
+
+
 
 **YOUR CODE GOES HERE**
