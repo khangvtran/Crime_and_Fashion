@@ -17,7 +17,7 @@ Once downloaded, the data can be read as follows.
 
 ```{r, echo = T, results = 'hide'}
 library(readr)
-FMNIST <- read_csv("FashionMNIST.csv")
+FMNIST <- read_csv("../data_files/FashionMNIST.csv")
 y <- FMNIST$label
 X <- subset(FMNIST, select = -c(label))
 rm('FMNIST') #remove from memory -- it's a relatively large file
@@ -45,7 +45,49 @@ image(1:28, 1:28, t(X1), col=gray((0:255)/255), main='Class 1 (Pants)')
 In this section, you will experiment with representing the images in fewer dimensions than $28*28 = 784$. You can use any of the various dimension reduction techniques introduced in class. How can you visualize these lower dimensional representations as images? How small of dimensionality can you use and still visually distinguish images from different classes?
 
 
-**YOUR CODE GOES HERE**
+## The Data
+
+As mentioned in the describtion, the data consists of 18,000 grayscale 28x28 pixel images of clothing items with corresponding labels, i.e. shoe, shirt and pants. A grayscale 28x28 pixel image is essentially an obeservation with 784 features. Our data set has 6,000 observations for each catagory, so using all 784 feauteres will likely lead to severe overfitting, thereby increasing the variance. The assignment asks us to perform some form of dimension reduction in the exploritory part. The reason for this are two fold: First it might simply gives us a better intuivtive understanding of which areas of the pictures vary the most, since each new dimension will through its weights corresond to different areas of the picture lighting up or not. Second, the new feautures can be used in the classification task later, as a way to, hopefully, trade of a small increase in bias, for a large reduction in variance.
+
+The dimension reduction method we choose to use is Principal Component Analysis (PCA). Intuitively this method finds the dimension in the original 784-dimensional with the largest variance, and then projects each obeservation onto this dimension, to extract the first principal component. When can then extract the second principal commpoent by finding the next dimension along which most variation occurs, conditional on it being orthogonal to the first dimension. 
+
+Technaically this can be don by performing an single value decomposition  of the mean-centered data $\mathbf{X} = \mathbf{U}\mathbf{D}\mathbf{V}^\top$. The 748 collumn vectors of $\mathbf{V}$ will then correspond to the loading of the corresponding principal components, such that $\mathbf{Z} = \mathbf{X}\mathbf{V}$. By only using  a few of the principal components, we wil still keep most of the variation in the data, but reduce the amounts of features used in the classification task. 
+
+In now continue to perform PCA.
+
+```{r}
+library(FactoMineR)
+
+X.centered <- scale(X,center=TRUE, scale=FALSE)
+
+pca <- PCA(X.centered ,scale.unit = FALSE, graph = FALSE,ncp = 50)
+```
+
+Using the the principal components and the loading vectors we can recover low-dimensional versions of the orginal pictures. This is done by using that 
+$\mathbf{Z_k} = \mathbf{X}\mathbf{V_k} \Rightarrow \mathbf{Z_k}\mathbf{V_k}^\top \approx \mathbf{X} $
+
+where $k$ is the number of retained principal components.
+
+```{r}
+V <- pca$svd$V
+Z <- pca$ind[["coord"]]
+X.test <- data.frame(Z%*%t(V))
+```
+
+These low-dimensional versions can then be viewed in the same way as before. Since the PCA need mean-centered data, we also plot a mean-centered version of the high-dimensional picture.
+
+
+```{r}
+X2 <- matrix(as.numeric(X.test[2,]), ncol=28, nrow=28, byrow = TRUE) 
+X2 <- apply(X2, 2, rev)
+image(1:28, 1:28, t(X2), col=gray((0:255)/255), main='Class 2 (Shoes) Compressed')
+
+X2 <- matrix(as.numeric(X.centered[2,]), ncol=28, nrow=28, byrow = TRUE) 
+X2 <- apply(X2, 2, rev)
+image(1:28, 1:28, t(X2), col=gray((0:255)/255), main='Class 2 (Shoes)')
+```
+
+We then examine the number of components needed for classes to still be visually distinguishable. This is different from the way, we normally choose the number of components to keep, which is done using rules, like keep all components with variance over a certain threshold or add compoents until a certain percentage of total variation is explained.  
 
 # Classification task
 
