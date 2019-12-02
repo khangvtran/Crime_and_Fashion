@@ -3,6 +3,8 @@ title: "Crime and Communities"
 output:
   pdf_document: default
   html_notebook: default
+  html_document:
+    df_print: paged
 ---
 
 
@@ -63,7 +65,8 @@ There exist in the original data the feature of states, county code, and communi
 \newpage
 
 ## Summary Statistics 
-
+#########################################
+How many do I show?
 ```{r}
 summary(X)
 ```
@@ -95,10 +98,6 @@ ggplot(data = employment_parents) +
 
 ```
 
-```{r}
-
-```
-
 
 \newpage
 
@@ -125,7 +124,76 @@ any(is.na(X))
 After the previous step of examination, it is obvious that many features are different in nature. For example, some feautures are Percentage (PctForeignBorn, PctBornSameState). Some are counts (NumInShelters, population). Some are in US Dollars (MedRent, ...). Each of the features have different range, scale, and unit. Such condition will affect how much each of the feature influence the predition later on .Therefore, it is highly crucial that we normalize the features.
 
 ```{r}
-X <- scale(X)
+# X <- scale(X)
+```
+
+## Dimensionality reduction - Principal Component Analysis
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+library(FactoMineR)
+```
+
+Apply PCA
+```{r}
+res.pca <- PCA(X = X,graph = F,ncp = 10)
+```
+
+Plot Screeplot for Eigenvalues. Due to the very high number of components (125), we only pick out the first 20
+
+```{r}
+eig <- res.pca$eig
+```
+
+Visualize Eigen value
+```{r}
+eigvalue <- eig[1:15, "eigenvalue"]
+
+barchart <- barplot(eigvalue, las = 1, border = NA,
+                    names.arg = 1:length(eigvalue),
+                    ylim = c(0, 1.1 * ceiling(max(eigvalue))), 
+                    ylab = "value",
+                    xlab = "Eigenvalues - how much variance the corresponding PC captures", 
+                    main = "Scree plot")
+
+points(barchart, eigvalue, pch = 19, col = "deepskyblue4") 
+lines(barchart, eigvalue, lwd = 2, col = "deepskyblue")
+```
+As you can see, each of the eigencalue represents the amount of variance in the dataset that was captured by the corresponding PC. Also, let's examine the eigen value result overall
+
+```{r}
+head(eig, n = 35)
+```
+
+With the given information above we can choose the number of component based on:
+
+- Elbow method: the first 6 PCs
+
+- Kaiser's rule $\lambda_k > 1$: the first 20 PCs
+
+- Jollie's rule $\lambda_k > 0.7$: the first 30 PCs
+
+- A, if we wish to keep the number of PCs that accumulatively capture 70% of the variance in the data, we can keep the first 10 PCs
+
+
+#########################################
+Interpretation of this plot
+```{r}
+p <- PCA(X[, 1:20], graph = T)
+```
+
+#########################################
+Question for Ryan: 
+Now my plan is that:
+Keep 10 PCs only and perform regression on PCs instead of doing so on the original data matrix. Which one of the ] "coord", "cor", "cos2" ,"contrib" should I use?
+
+Also, do I scale principal component again
+
+
+```{r}
+# head(res.pca$var)
+PCs <- res.pca$var
+names(PCs) # "coord"   "cor"     "cos2"    "contrib"
+PCs <- res.pca$var[["coord"]]
 ```
 
 # Regression task
