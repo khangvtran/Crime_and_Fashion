@@ -10,7 +10,7 @@ output:
 
 **Group Member 1 Name: **Khang V. Tran  **Group Member 1 SID: **25181590
 
-**Group Member 2 Name: **Christian Philip Hoeck   **Group Member 2 SID: **_______________
+**Group Member 2 Name: **Christian Philip Hoeck   **Group Member 2 SID: **3035385003
 
 The crime and communities dataset contains crime data from communities in the United States. The data combines socio-economic data from the 1990 US Census, law enforcement data from the 1990 US LEMAS survey, and crime data from the 1995 FBI UCR. More details can be found at https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized.
 
@@ -45,61 +45,6 @@ In this section, you should provide a thorough exploration of the features of th
 library(dplyr)
 ```
 
-## Examine Categorical vs. Quantitative data
-Let's look at the structure of the data
-```{r}
-str(X)
-```
-
-\newpage
-
-The structure of the data is partialy ommited due to the high number of features. Let's try getting the class of each feature
-```{r}
-apply(X = X, MARGIN = 2, FUN = class)
-```
-
-Neither str() nor apply(class) shows any factor. Just to be certain, I examine the documentation from the source (UC Irvine): https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized
-
-There exist in the original data the feature of states, county code, and community code, which are catergorical. However, they are not included in the given data. On the other hads, all other quantitative features in the original data are. We can say that the data set is entirely quantitative.
-
-\newpage
-
-## Summary Statistics 
-#########################################
-How many do I show?
-```{r}
-summary(X)
-```
-
-
-## Visualization
-
-Due to such as massive number of feature, there is no way to visualize data from every feature without dimentionality reduction. In the next coming graphs, we only examine some groups of feature that will hopefully tell us something about the data.
-
-```{r, echo = FALSE, warning=FALSE, message=FALSE}
-library(ggplot2)
-```
-
-
-```{r, echo = FALSE}
-employment_parents <- X %>% select(matches("Empl|Par")) %>% mutate(CrimeRate = y)
-
-# ggplot(data = employment_parents) + 
-#   geom_point(aes(x = PctUnemployed, y = CrimeRate, color = PctKids2Par)) +
-#   scale_color_gradient(low = "red", high = "white") + 
-#   ggtitle("Crime Rate with respect to Unemployment rate and Single Parent Family Rate")
-
-ggplot(data = employment_parents) + 
-  geom_point(aes(x = PctUnemployed, color = CrimeRate, y = 1/PctKids2Par)) +
-  scale_color_gradient(low = "pink", high = "black") + 
-  xlab("Unemployment Rate") +
-  ylab("Single Parent Househole Rate") +
-  ggtitle("Crime Rate with respect to Unemployment rate and Single Parent Family Rate")
-
-```
-
-
-\newpage
 
 ## Missing Data Processing
 
@@ -113,18 +58,129 @@ check if any of the features contains missing data
 any(is.na(X))
 ```
 
-Now that we have detected there is NA in some the features, we decide to replace it by the median of other existing data in that corresponding feature
+Now, as we have detected that there exist feature(s) in X that contain NA, the next step is to find and remove features with high proportion of NA (50% or above) and remove them all together before process those that have an acceptable number of NA
+```{r}
+
+get_na_perc <- function(x, n){
+  return(sum(is.na(x))/n)
+}
+
+get_na_perc_all_features <- function(features){
+  n = nrow(features)
+  perc <- apply(X = features, MARGIN = 2, FUN = function(x) sum(is.na(x))/n)
+  return(perc)
+}
+
+get_feature_high_na <- function(features, threshold){
+  perc <- get_na_perc_all_features(features)
+  return(names(perc[perc >= threshold]))
+}
+
+feature_high_na <- get_feature_high_na(X, .5)
+print(feature_high_na)
+X <- X %>% select(-feature_high_na)
+```
+
+
+Now that we have only feature with none or a low number of NA left, let's replace the mising values with the median
 ```{r}
 X <- X %>% mutate_all(function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x))
 any(is.na(X))
 ```
+
+\newpage
+
+## Examine Categorical vs. Quantitative data
+
+```{r, results="hide"}
+str(X)
+```
+
+By examine the structure of the data using str() (result not shown due to exessive printig) we can explore the datatype of each feature. So far, we are be able to see that there is no factor type, which means there is no string categorical feature. Neither str() nor apply(class) shows any factor. Just to be certain, I examine the documentation from the source (UC Irvine): https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized and did not find any character nor factor class. However, more examination is needed since there might be numerical catergorical data.
+
+
+```{r}
+hist(X$householdsize)
+print(head(X$householdsize, n = 20))
+```
+
+By plotting histogram, we can pick out some categorical-likely feature. One of them is $householdsize$. However, when verifying with the documentation, we see that $householdsize$ is actually  the mean people per household (numeric - decimal). By printing out the first few values, we are able to confirm this. Therefore, it is not categorical
+
+
+
+```{r}
+hist(X$MedNumBR)
+print(head(X$MedNumBR))
+```
+
+The next candidate is $MedNumBR$. This is, indeed, categorical and we can confirm this by once again using histogram and by printing out the first few values. However, since this is numerical, it does not matter if this is categorical. We leave it as is.
+
+There exist in the original data the feature of states, county code, and community code, which are catergorical. However, they are not included in the given data. On the other hads, all other quantitative features in the original data are. We can say that the data set is entirely quantitative.
+
+\newpage
+
+## Summary Statistics 
+
+When speaking about crimes, there are factors that need to be taken into consideration. They are Unemployment, Children of Single Parent, Homelessness/Rent, and Poverty. Due to the high number of feature, we will only select a few feature that will give a very general idea about some of these factors
+
+```{r}
+interesting_features <- c("PctUnemployed", "NumKidsBornNeverMar", "MedRentPctHousInc", "PctPopUnderPov")
+
+summary_stat <- function(features, selection){
+  stats <- apply(X = features[, selection], MARGIN = 2, FUN = summary)
+  return(stats)
+}
+
+summary_stat(X, interesting_features)
+```
+
+
+\newpage
+
+## Visualization
+
+Due to such as massive number of feature, there is no way to visualize data from every feature without dimentionality reduction. In the next coming graphs, we only examine some groups of feature that will hopefully tell us something about the data.
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+```
+
+
+```{r, echo = FALSE}
+temp_df <- X %>% select(matches("Empl|Par|Pov")) %>% mutate(CrimeRate = y)
+# print(head(temp_df))
+```
+
+
+```{r}
+ggplot(data = temp_df) + 
+  geom_point(aes(x = PctUnemployed, color = CrimeRate, y = 1/PctKids2Par)) +
+  scale_color_gradient(low = "pink", high = "black") + 
+  xlab("Unemployment Rate") +
+  ylab("Single Parent Househole Rate") +
+  ggtitle("Crime Rate with respect to Unemployment rate and Single Parent Family Rate")
+```
+
+\newpage
+
+```{r}
+ggplot(data = temp_df) +
+  geom_point(aes(x = PctPopUnderPov, y = CrimeRate, alpha = 0.3)) + 
+  xlab("Percentage under Poverty") +
+  ggtitle("Crime Rate with respect to Poverty")
+```
+
+As we can see, there is a correlation between crime and poverty as well as crime and unemployment. However, these relartionship are not exactly linear.
+
+\newpage
+
 
 ## Data Normalization - Scaling
 
 After the previous step of examination, it is obvious that many features are different in nature. For example, some feautures are Percentage (PctForeignBorn, PctBornSameState). Some are counts (NumInShelters, population). Some are in US Dollars (MedRent, ...). Each of the features have different range, scale, and unit. Such condition will affect how much each of the feature influence the predition later on .Therefore, it is highly crucial that we normalize the features.
 
 ```{r}
-# X <- scale(X)
+X <- scale(X)
 ```
 
 ## Dimensionality reduction - Principal Component Analysis
@@ -135,7 +191,7 @@ library(FactoMineR)
 
 Apply PCA
 ```{r}
-res.pca <- PCA(X = X,graph = F,ncp = 10)
+res.pca <- PCA(X = X,graph = F,ncp = 30)
 ```
 
 Plot Screeplot for Eigenvalues. Due to the very high number of components (125), we only pick out the first 20
@@ -144,7 +200,7 @@ Plot Screeplot for Eigenvalues. Due to the very high number of components (125),
 eig <- res.pca$eig
 ```
 
-Visualize Eigen value
+Visualize Eigenvalue
 ```{r}
 eigvalue <- eig[1:15, "eigenvalue"]
 
@@ -164,6 +220,8 @@ As you can see, each of the eigencalue represents the amount of variance in the 
 head(eig, n = 35)
 ```
 
+\newpage
+
 With the given information above we can choose the number of component based on:
 
 - Elbow method: the first 6 PCs
@@ -175,26 +233,20 @@ With the given information above we can choose the number of component based on:
 - A, if we wish to keep the number of PCs that accumulatively capture 70% of the variance in the data, we can keep the first 10 PCs
 
 
-#########################################
-Interpretation of this plot
-```{r}
-p <- PCA(X[, 1:20], graph = T)
+
+```{r, echo = FALSE}
+p <- PCA(X[, 1:10], graph = F)
+plot(p,choix="var",new.plot=FALSE)
 ```
-
-#########################################
-Question for Ryan: 
-Now my plan is that:
-Keep 10 PCs only and perform regression on PCs instead of doing so on the original data matrix. Which one of the ] "coord", "cor", "cos2" ,"contrib" should I use?
-
-Also, do I scale principal component again
 
 
 ```{r}
-# head(res.pca$var)
-PCs <- res.pca$var
-names(PCs) # "coord"   "cor"     "cos2"    "contrib"
-PCs <- res.pca$var[["coord"]]
+# names(PCs) # "coord"   "cor"     "cos2"    "contrib"
+PCs <- res.pca$ind$coord
+print(head(PCs))
 ```
+
+\newpage
 
 # Regression task
 
