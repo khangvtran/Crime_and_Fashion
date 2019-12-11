@@ -27,7 +27,7 @@ X <- subset(CC, select = -c(ViolentCrimesPerPop))
 ```
 
 
-# Dataset exploration
+# Part 1) Dataset Exploration - Feature Creating and Engineering
 
 In this section, you should provide a thorough exploration of the features of the dataset. Things to keep in mind in this section include:
 
@@ -96,7 +96,7 @@ any(is.na(X))
 str(X)
 ```
 
-By examine the structure of the data using str() (result not shown due to exessive printig) we can explore the datatype of each feature. So far, we are be able to see that there is no factor type, which means there is no string categorical feature. Neither str() nor apply(class) shows any factor. Just to be certain, I examine the documentation from the source (UC Irvine): https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized and did not find any character nor factor class. However, more examination is needed since there might be numerical catergorical data.
+By examine the structure of the data using str() (result not shown due to exessive printing) we can explore the datatype of each feature. So far, we are be able to see that there is no factor type, which means there is no string categorical feature. Neither str() nor apply(class) shows any factor. Just to be certain, I examine the documentation from the source (UC Irvine): https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized and did not find any character nor factor class. However, more examination is needed since there might be numerical catergorical data.
 
 
 ```{r}
@@ -214,10 +214,11 @@ barchart <- barplot(eigvalue, las = 1, border = NA,
 points(barchart, eigvalue, pch = 19, col = "deepskyblue4") 
 lines(barchart, eigvalue, lwd = 2, col = "deepskyblue")
 ```
+
 As you can see, each of the eigencalue represents the amount of variance in the dataset that was captured by the corresponding PC. Also, let's examine the eigen value result overall
 
 ```{r}
-head(eig, n = 35)
+head(eig, n = 10)
 ```
 
 \newpage
@@ -236,6 +237,7 @@ With the given information above we can choose the number of component based on:
 
 ```{r, echo = FALSE}
 p <- PCA(X[, 1:10], graph = F)
+# p <- PCA(X, graph = F)
 plot(p,choix="var",new.plot=FALSE)
 ```
 
@@ -243,15 +245,63 @@ plot(p,choix="var",new.plot=FALSE)
 ```{r}
 # names(PCs) # "coord"   "cor"     "cos2"    "contrib"
 PCs <- res.pca$ind$coord
-print(head(PCs))
+print(head(PCs, 3))
+```
+
+
+
+\newpage
+
+# Part 2) Regression task
+
+In this section, you should use the techniques learned in class to develop a model to predict ViolentCrimesPerPop using the 124 features (or some subset of them) stored in $\mathbf{X}$. Remember that you should try several different methods, and use model selection methods to determine which model is best. You should also be sure to keep a held-out test set to evaluate the performance of your model.
+
+**YOUR CODE GOES HERE**
+
+## Part 2.1) Train - Test - Validation Data Randomization
+
+In order to perform hyperparameter tuning within a model and model selecting, we will apply three-way hold-out method. Meaning, the data will be randomized into:
+
+- Train: 60% of the data
+- Validation: 20% of the data
+- Test: 20% of the data
+
+We will then performed training, and hyperparameter selection
+
+```{r}
+n <- nrow(X)
+indices <- 1:n
+
+# randomize 60% of the original data to be the train set
+train_indices <- sample(x = indices, size = round(.6*n))
+train_pcs <- PCs[train_indices, ]
+train_features <- X[train_indices, ]
+train_target <- y[train_indices]
+
+# randomize 20% of the original data to be the validation test
+# (50% of the remaining data after sampling the train set)
+validation_indices <- sample(x = indices[-train_indices],
+                  size = round(.5*length(indices[-train_indices])))
+validation_pcs <- PCs[validation_indices, ]
+validation_features <- X[validation_indices, ]
+validation_target <- y[validation_indices]
+
+# use the rest of the data (20% of the original dataset) to be the final dataset
+test_indices <- sample(x = indices[c(-train_indices,
+                                     -validation_indices)])
+validation_pcs <- PCs[validation_indices, ]
+validation_features <- X[validation_indices, ]
+validation_target <- y[validation_indices]
+
 ```
 
 \newpage
 
-# Regression task
+## Part 2.2) Training Phase
+ 
+## Part 2.3) Hyper Parameter Tuning
+ 
+## Part 2.4) Model Selection
+ 
+## Part 2.5) Final Model
 
-In this section, you should use the techniques learned in class to develop a model to predict ViolentCrimesPerPop using the 124 features (or some subset of them) stored in $\mathbf{X}$. Remember that you should try several different methods, and use model selection methods to determine which model is best. You should also be sure to keep a held-out test set to evaluate the performance of your model.
-
-
-
-**YOUR CODE GOES HERE**
