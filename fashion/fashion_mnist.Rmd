@@ -15,9 +15,9 @@ The dataset contains $n=18,000$ different $28\times 28$ grayscale images of clot
 
 Once downloaded, the data can be read as follows.
 
-```{r, echo = T, results = 'hide'}
+```{r, echo = T, results = 'hide', warning=FALSE}
 library(readr)
-FMNIST <- read_csv("FashionMNIST.csv")
+FMNIST <- read_csv("../data_files/FashionMNIST.csv")
 y <- FMNIST$label
 X <- subset(FMNIST, select = -c(label))
 rm('FMNIST') #remove from memory -- it's a relatively large file
@@ -45,7 +45,76 @@ image(1:28, 1:28, t(X1), col=gray((0:255)/255), main='Class 1 (Pants)')
 In this section, you will experiment with representing the images in fewer dimensions than $28*28 = 784$. You can use any of the various dimension reduction techniques introduced in class. How can you visualize these lower dimensional representations as images? How small of dimensionality can you use and still visually distinguish images from different classes?
 
 
-**YOUR CODE GOES HERE**
+## The Data and PCA
+
+As mentioned in the describtion, the data consists of 18,000 grayscale 28x28 pixel images of clothing items with corresponding labels, i.e. shoe, shirt and pants. A grayscale 28x28 pixel image is essentially an obeservation with 784 features. Our data set has 6,000 observations for each catagory, so using all 784 feauteres will likely lead to severe overfitting, thereby increasing the variance. The assignment asks us to perform some form of dimension reduction in the exploritory part. The reason for this are two fold: First it might simply gives us a better intuivtive understanding of which areas of the pictures vary the most, since each new dimension will through its weights corresond to different areas of the picture lighting up or not. Second, the new feautures can be used in the classification task later, as a way to, hopefully, trade of a small increase in bias, for a large reduction in variance.
+
+The dimension reduction method we choose to use is Principal Component Analysis (PCA). Intuitively this method finds the dimension in the original 784-dimensional with the largest variance, and then projects each obeservation onto this dimension, to extract the first principal component. When can then extract the second principal commpoent by finding the next dimension along which most variation occurs, conditional on it being orthogonal to the first dimension. 
+
+Technaically this can be don by performing an single value decomposition  of the mean-centered data $\mathbf{X} = \mathbf{U}\mathbf{D}\mathbf{V}^\top$. The 748 collumn vectors of $\mathbf{V}$ will then correspond to the loading of the corresponding principal components, such that $\mathbf{Z} = \mathbf{X}\mathbf{V}$. By only using  a few of the principal components, we wil still keep most of the variation in the data, but reduce the amounts of features used in the classification task. 
+
+In now continue to perform PCA. Often one standardizes the data before performing PCA, since it is not scale invariant. However, in this case all the feauteres are levels of white in the corresponding pixel, and they therefore have the same scale. I therefore simply mean-center the data.
+
+```{r}
+library(FactoMineR)
+
+X.centered <- scale(X,center=TRUE, scale=FALSE)
+
+pca <- PCA(X.centered ,scale.unit = FALSE, graph = FALSE,ncp = 784)
+```
+
+Using the the principal components and the loading vectors we can recover low-dimensional versions of the orginal pictures. This is done by using that 
+$\mathbf{Z_k} = \mathbf{X}\mathbf{V_k} \Rightarrow \mathbf{Z_k}\mathbf{V_k}^\top \approx \mathbf{X} $
+
+where $k$ is the number of retained principal components.
+
+```{r}
+V <- pca$svd$V
+Z <- pca$ind[["coord"]]
+X.test <- data.frame(Z%*%t(V))
+```
+
+These low-dimensional versions can then be viewed in the same way as before. Since the PCA need mean-centered data, we also plot a mean-centered version of the high-dimensional picture.
+
+
+```{r}
+X2 <- matrix(as.numeric(X.test[2,]), ncol=28, nrow=28, byrow = TRUE) 
+X2 <- apply(X2, 2, rev)
+image(1:28, 1:28, t(X2), col=gray((0:255)/255), main='Class 2 (Shoes) Compressed')
+
+X2 <- matrix(as.numeric(X.centered[2,]), ncol=28, nrow=28, byrow = TRUE) 
+X2 <- apply(X2, 2, rev)
+image(1:28, 1:28, t(X2), col=gray((0:255)/255), main='Class 2 (Shoes)')
+```
+
+We then examine the number of components needed for classes to still be visually distinguishable. This is different from the way, we normally choose the number of components to keep, which is done using rules, like keep all components with variance over a certain threshold or add compoents until a certain percentage of total variation is explained.  
+
+Here I show the the compressed images using 1, 2, and 100, pcs. We see that the using only 1 PC. It is hard to distinguish that it is a shirt. Actually it more looks like pants, but with a less intensive shirt. We also see that a shoe is blacked out. THis indicates that the first PC is  correlated with the pixels containing pants and shirts, and  correlated with the pixels containing shoes with the opposite sign. When using 2 pcs the shirt is clearly distinguishable. The second pc is therefore positively (negatively) correlated with the pixels related to shirts and negatively (positively) correlated with the pixels related to pants. We also see that the pixels on related to shoes are not affected. In the image using 100 pcs we see that the logo of the shirt is recovered. However it is clear, that only 2 pcs are needed to distinguish the classes from each other. We can therefore reduce a 784-dimesional space to a 2-dimensional space, and still keep the relevant variation.
+
+```{r}
+X.1 <- data.frame(Z[,1]%*%t(V[,1]))
+X.2 <- data.frame(Z[,1:2]%*%t(V[,1:2]))
+X.3 <- data.frame(Z[,1:3]%*%t(V[,1:3]))
+X.100 <- data.frame(Z[,1:100]%*%t(V[,1:100]))
+```
+
+```{r}
+X.image <- matrix(as.numeric(X.1[2,]), ncol=28, nrow=28, byrow = TRUE) 
+X.image <- apply(X.image, 2, rev)
+image(1:28, 1:28, t(X.image), col=gray((0:255)/255), main='Class 0 (Shirt) Compressed 1 PCs')
+
+
+X.image <- matrix(as.numeric(X.2[2,]), ncol=28, nrow=28, byrow = TRUE) 
+X.image <- apply(X.image, 2, rev)
+image(1:28, 1:28, t(X.image), col=gray((0:255)/255), main='Class 0 (Shirt)  Compressed 2 PCs')
+
+
+X.image <- matrix(as.numeric(X.100[2,]), ncol=28, nrow=28, byrow = TRUE) 
+X.image <- apply(X.image, 2, rev)
+image(1:28, 1:28, t(X.image), col=gray((0:255)/255), main='Class 0 (Shirt)  Compressed 100 PCs')
+```
+
+
 
 # Classification task
 
@@ -55,10 +124,443 @@ In this section, you should use the techniques learned in class to develop a mod
 
 Remember that you should try several different methods, and use model selection methods to determine which model is best. You should also be sure to keep a held-out test set to evaluate the performance of your model. 
 
-**YOUR CODE GOES HERE**
+### Our code
+
+We start by dividing the dataset into three parts: The Training set (60 pct.), Validation  set (20 pct.) and Test set (20 pct.). The training set is used to fit the models to the data, and perform tuning of hyperparamets with cv when necessary. The validation set is then used to determine which model has the best performance. If we did not have a seperate validation set, our estimate for the error rate when evalutating which models is best would be downwards biased. This is especially true for very flexible methods which tend to overfit noise in the data. After selecting our prefered model, the test set is used to evaluate its performance. If we just used the error rate used for model selection, the estimate would be downwards biased as this is the estimate condtional on the model winning. 
+
+```{r}
+set.seed(1)
+train_idx <- sample(nrow(X), nrow(X)*0.6)
+test_idx <- sample(seq(1,nrow(X),1)[-train_idx], nrow(X)*0.2)
+val_idx <- seq(1,nrow(X),1)[-c(train_idx,test_idx)]
+```
+
+We will use three different methods for predicting the binary responses, Lineary Discriminant Analysis, Logistic Regression Random Forrest. These method have different strengths and weakness, with LDA having relatively strong assumptions and therefore high bias, but low variance, Logistic Regression, does not have any direct distributional assumption but still parameterizes the condition probability and has is quite rigid.  Random forest also has low bias but due to bagging it also has relatively low variance.
+
+
+We start by preparing the data, and splitting it into the three sets, i.e. shirt vs. pants (Case 1), shoes vs. shirt (Case 2) and pants vs. shoes (Case 3).
+
+```{r Data}
+
+# Bind response and covariates in on dataframe
+Xy <- cbind(X,"y" = as.factor(y))
+names(Xy) <- make.names(names(Xy))
+
+
+# Create three datasets for each binary classification task.
+Xy.split <- split(Xy, y)
+Xy.1 <- rbind(Xy.split$`0`,Xy.split$`1`)
+Xy.2 <- rbind(Xy.split$`0`,Xy.split$`2`)
+Xy.3 <- rbind(Xy.split$`1`,Xy.split$`2`)
+
+# Need to refactorize so only to levels exist
+Xy.1$y <- factor(Xy.1$y)
+Xy.2$y <- factor(Xy.2$y)
+Xy.3$y <- factor(Xy.3$y)
+
+# Create relevant subsets of existing training, validation and test subsets
+train_idx.1 <- row.names(Xy.1) %in% subset(train_idx, train_idx %in% row.names(Xy.1))
+train_idx.2 <- row.names(Xy.2) %in% subset(train_idx, train_idx %in% row.names(Xy.2))
+train_idx.3 <- row.names(Xy.3) %in% subset(train_idx, train_idx %in% row.names(Xy.3))
+
+test_idx.1 <- row.names(Xy.1) %in% subset(test_idx, test_idx %in% row.names(Xy.1))
+test_idx.2 <- row.names(Xy.2) %in% subset(test_idx, test_idx %in% row.names(Xy.2))
+test_idx.3 <- row.names(Xy.3) %in% subset(test_idx, test_idx %in% row.names(Xy.3))
+
+val_idx.1 <- row.names(Xy.1) %in% subset(val_idx, val_idx %in% row.names(Xy.1))
+val_idx.2 <- row.names(Xy.2) %in% subset(val_idx, val_idx %in% row.names(Xy.2))
+val_idx.3 <- row.names(Xy.3) %in% subset(val_idx, val_idx %in% row.names(Xy.3))
+
+```
+
+We start with Linear Discriminant (LDA) analysis. Simply put LDA  and QDA works by assuming that all the covariates are drawn from different gaussian distribution depending on their class. Using the gaussian assumption we can estimate the parameters of the distribution, and thereby recover an estimated density function $f_k(x)$. Using the estimated density and the Bayes theorem one can then calculate the posterior density, i.e. the probability that an observation belongs to a specific class conditional on the control variables, $Pr(y=k,X=x) = \frac{\pi_k f_k(x)}{\sum^K_{j=1}\pi_l f_l(x)}$, where $\pi_k$ is the prior density, which is simply estimated as the proportion of each class in the sample. From the Bayes Classifier, we know that the class with the highest posterior probability is the best prediction, and that is how the actual class prediction is done. The difference between LDA and QDA, is that for LDA you assume a common covariance structure across classes and only different means, while QDA allows for different covariance structures for each class. LDA is therefore less flexible, which of course results in higher bias but lower variance. Which one is prefered depends on the given setting.  For LDA we use the `lda()` function which is part of the MASS library.
+
+Since some are the pixels are constant for all pictures in Case 3, I temporarily remove them. This changes nothing as the dont contain information relevant for Case 3, and does not put lda at a disadvatange.
+
+```{r LDA}
+library(MASS)
+
+# Case 1: 0 vs. 1
+# Estimating LDA model and performing prediction
+lda.1 <- lda(y~.,Xy.1,subset = train_idx.1)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.lda.1 <- predict(lda.1,newdata = Xy.1[val_idx.1,])
+confusion.lda.1 <- table(obs = Xy.1[val_idx.1,"y"], pred = yhat.lda.1$class)
+error_rate.lda.1 <- 1 - (sum(diag(confusion.lda.1)) / sum(val_idx.1))
+
+
+# Case2: 0 vs. 2
+# Estimating LDA model and performing prediction
+lda.2 <- lda(y~.,Xy.2,subset = train_idx.2)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.lda.2 <- predict(lda.2,newdata = Xy.2[val_idx.2,])
+confusion.lda.2 <- table(obs = Xy.2[val_idx.2,"y"], pred = yhat.lda.2$class)
+error_rate.lda.2 <- 1 - (sum(diag(confusion.lda.2)) / sum(val_idx.2))
+
+# Case 3: 1 vs. 2
+# Estimating LDA model and performing prediction
+# Temporarily removing constant features
+tmp.Xy.3 <- Xy.3[,apply(Xy.3[train_idx.3,], 2, var, na.rm=TRUE) != 0]
+lda.3 <- lda(y~.,tmp.Xy.3,subset = train_idx.3)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.lda.3 <- predict(lda.3,newdata = Xy.3[val_idx.3,])
+confusion.lda.3 <- table(obs = Xy.3[val_idx.3,"y"], pred = yhat.lda.3$class)
+error_rate.lda.3 <- 1 - (sum(diag(confusion.lda.3)) / sum(val_idx.3))
+
+```
+
+We then turn to logistic regression. It models the probability of being class $y$ conditional on $X$, as a logitstic function of a linear combination of the features, $p(y=1|X=x)=\phi(\beta^\top x_i)$. These probabilities are used to create a likelyhood function $\prod_\limits{i=1}^n\phi(\beta^\top x_i)^{y_i}(1-\phi(\beta^\top x_i))^{1-y_i}$. One can then use gradient decent to maximize the log-likelihood function to find the optimal weights. Often LDA and logistic regression performs similar as they both create linear decision boundaries. However, if the gaussian asumption made when using LDA does not hold, logistic regression will tend to perfom better (ISL p. 151). The opposite is true if the assumption approximately holds. To perfom logistic regression we use the `glm` function.
+
+```{r log}
+
+# Case 1: 0 vs. 1
+# Estimating logistic model
+log.1 <- glm(y~.,data=Xy.1,subset = train_idx.1,family = binomial, maxit = 100)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.log.1 <- round(predict(log.1,newdata = Xy.1[val_idx.1,],type="response"))
+confusion.log.1 <- table(obs = Xy.1[val_idx.1,"y"], pred = yhat.log.1)
+error_rate.log.1 <- 1 - (sum(diag(confusion.log.1)) / sum(val_idx.1))
+
+# Case 2: 0 vs. 2
+# Estimating logistic model
+log.2 <- glm(y~.,data=Xy.2,subset = train_idx.2,family = binomial, maxit = 100)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.log.2 <- round(predict(log.2,newdata = Xy.2[val_idx.2,],type="response"))
+confusion.log.2 <- table(obs = Xy.2[val_idx.2,"y"], pred = yhat.log.2)
+error_rate.log.2 <- 1 - (sum(diag(confusion.log.2)) / sum(val_idx.2))
+
+# Case 3: 1 vs. 2
+# Estimating logistic model
+log.3 <- glm(y~.,data=Xy.3,subset = train_idx.3,family = binomial, maxit = 100)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.log.3 <- round(predict(log.3,newdata = Xy.3[val_idx.3,],type="response"))
+confusion.log.3 <- table(obs = Xy.3[val_idx.3,"y"], pred = yhat.log.3)
+error_rate.log.3 <- 1 - (sum(diag(confusion.log.3)) / sum(val_idx.3))
+
+```
+
+K-Nearest Neighbor (KNN), is a very simple method, which can be seen as an extremely non-parametric estimation of the posterior probabilities of each class. Given a test observation it simply find the K training observations that are nearest in the covariate space given a specified metric, and calculates the posterior probablity as the proportions of each class. Like Bayes' classifier it then predicts the class with the highest probability. KNN depends on two decision made by the researcher: The metric used and the number of neighborghs included. Most of the time euclidian distance is used, but depending one the data other norms might be more relevant. The most important parameter is the number of neighbor, K, as it decides of flexible or rigid the method is. It can range from $k=1$, which is so flexible that it perfectly fits the training sample, to $k=n$ which simply amount to predicting the class with the highest frequency in the sample. The choice of k, is clearly a classic bias-variance tradeoff, and we choose to find the optimal k, using 5-fold cross-validation.
+
+The function used is `knn` from the `class` package.
+
+```{r KNN}
+
+#### WARNING: This is computationally heavy and will take along time
+library(class)
+
+# We first find the optimal numbers of neighbors using 5-fold crossvailidation.
+K <- 5
+set.seed(1)
+# Generate indices of holdout observations
+holdout.1 <- split(sample(1:length(train_idx.1)),1:K)
+holdout.2 <- split(sample(1:length(train_idx.2)),1:K)
+holdout.3 <- split(sample(1:length(train_idx.3)),1:K)
+
+# Initialize CV-error vectors
+CV_err.1 <- rep(NaN,10)
+CV_err.2 <- rep(NaN,10)
+CV_err.3 <- rep(NaN,10)
+
+CV_err_temp.1 <-rep(NaN,K)
+CV_err_temp.2 <-rep(NaN,K)
+CV_err_temp.3 <-rep(NaN,K)
+
+for(i in 1:10){
+
+for(k in 1:5){    
+# Create current training index
+cv_idx.1 <- train_idx.1[-holdout.1[[k]]]  
+cv_idx.2 <- train_idx.2[-holdout.2[[k]]]
+cv_idx.3 <- train_idx.3[-holdout.3[[k]]]  
+
+# Perfom prediction
+pred.knn.1 <- knn(Xy[cv_idx.1,1:784],Xy.1[holdout.1[[k]],1:784],Xy.1[cv_idx.1,"y"],k=i)
+pred.knn.2 <- knn(Xy[cv_idx.2,1:784],Xy.2[holdout.2[[k]],1:784],Xy.2[cv_idx.2,"y"],k=i)
+pred.knn.3 <- knn(Xy[cv_idx.3,1:784],Xy.3[holdout.3[[k]],1:784],Xy.3[cv_idx.3,"y"],k=i)
+
+# Calculate Confusion matrices and error rates
+confusion.knn.1 <- table(obs = Xy.1[holdout.1[[k]]], pred = pred.knn.1)
+confusion.knn.2 <- table(obs = Xy.2[holdout.2[[k]]], pred = pred.knn.2)
+confusion.knn.3 <- table(obs = Xy.3[holdout.3[[k]]], pred = pred.knn.3)
+
+CV_err_temp.1[k] <- 1 - (sum(diag(confusion.knn.1)) / sum(test_idx.1))
+CV_err_temp.2[k] <- 1 - (sum(diag(confusion.knn.2)) / sum(test_idx.2))
+CV_err_temp.3[k] <- 1 - (sum(diag(confusion.knn.3)) / sum(test_idx.3))
+
+}
+  
+# Calculate mean cv-error rate
+CV_err.1[i] <- mean(CV_err_temp.1)
+CV_err.2[i] <- mean(CV_err_temp.2)
+CV_err.3[i] <- mean(CV_err_temp.3)
+}
+
+```
+
+When using Random Forest one creates $B$ new samples of data using bootstrapping of the original data and then fits a decision tree to each one. In addition to the randomness induced by the different bootstrap samples, one tries to uncorrelate the trees even more, by restricting the number of features considered at each node-split to a small subsample of the features, usually $\sqrt{p}$ features. By making the trees less correlated, Random Forest becomes a method that has the same low bias of the decision trees, but has a much lowever variance, since the average of 50 or 500 trees varies less from the mean hypothesis than a single tree does. Another benifit of this method, and bagging in general, is that one can use the so called "Out-of-bag" error as an estimate for the Test MSE. This means that one can use the entire sample for training. However, for this exercise we will use the same training sample for all the methods and and estimate the Test and Validation MSE using the hold-out method, in addition to reporting th out-of-bag error.
+
+
+For Random Forest and use the `randomForest` package. The number of features considered at each split is set at the default $\sqrt{p}$, which has been shown to be the theoretical optimal. Each random forest consists of 100 trees.
+
+```{r Random Forest}
+library(randomForest)
+set.seed(1)
+
+# Case 1: 0 vs. 1
+# Estimating Random forest model
+rf.1 <- randomForest(y~.,Xy.1,subset = train_idx.1)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.rf.1 <- predict(rf.1,newdata = Xy.1[val_idx.1,])
+confusion.rf.1 <- table(obs = Xy.1[val_idx.1,"y"], pred = yhat.rf.1)
+error_rate.rf.1 <- 1 - (sum(diag(confusion.rf.1)) / sum(val_idx.1))
+
+
+# Case 2: 0 vs. 2
+# Estimating Random forest model
+rf.2 <- randomForest(y~.,Xy.2,subset = train_idx.2)
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.rf.2 <- predict(rf.2,newdata = Xy.2[val_idx.2,])
+confusion.rf.2 <- table(obs = Xy.2[val_idx.2,"y"], pred = yhat.rf.2)
+error_rate.rf.2 <- 1 - (sum(diag(confusion.rf.2)) / sum(val_idx.2))
+
+
+# Case 3: 1 vs. 2
+# Estimating Random forest model
+rf.3 <- randomForest(y~.,Xy.1,subset = train_idx.3 )
+
+# Performing prediction and calculating Confusion matrix and error rate for validation set
+yhat.rf.3 <- predict(rf.3,newdata = Xy.1[val_idx.3,])
+confusion.rf.3 <- table(obs = Xy.1[val_idx.3,"y"], pred = yhat.rf.3)
+error_rate.rf.3 <- 1 - (sum(diag(confusion.rf.3)) / sum(val_idx.3))
+
+```
+
+As mentioned the test error rate can be estimated as the Out-of-Bag error rate for all bagging methods. The OOB error rates for the three cases are
+
+
+```{r Random Forest}
+mean(rf.1$err.rate[,"OOB"])
+mean(rf.2$err.rate[,"OOB"])
+mean(rf.3$err.rate[,"OOB"])
+```
+We see that the random forests generally perfom very well. A deeper analysis of the errors and confusion matrices is done in the model selection section.
+
+### Method selection
+
+The validation the confusion matrix and validation error for each method and each case now presented, and the best one is chosen.
+
+
+#### Case 1: 0 vs. 1
+
+Below are all the confusion matrices and a table of the validation errors. We see that all the models generally perfom  well with a error rate of around 2 pct. for LDA and 0.05 for Logistic Regression. Random forest however has the lowest with an error rate of 0.7 pct. From the confusion matrix we see that LDA and Random Forest methods generally mistake pants for shirts more than shirts for pants, but logistic regression mistakes more shirts for pants. Our prefered model in this case is the Random forest.
+
+```{r Validation error}
+error.1 <- data.frame("LDA" = error_rate.lda.1,"Logistic Regression" = error_rate.log.1, "Random Forest" = error_rate.rf.1)
+error.1
+
+message("LDA Confusion matrix")
+confusion.lda.1
+
+message("Logistic RegressionConfusion matrix")
+confusion.log.1
+
+message("Random Forest Confusion matrix")
+confusion.rf.1
+```
+
+#### Case 2: 0 vs. 2
+
+Again performance is really good. Random forest still has the lowest with an error rate of 0.04 pct. LDA has an error rate of 0.1 pct., Logistic Regression has an error rate of 0.3 pct. Generally the methods perform even better in Case 2, than Case 1. From the confusion matrix we see that allmost no errors are made, with random forrest only having one error.  Our prefered model in this case is the Random forest.
+
+```{r Validation error}
+error.2 <- data.frame("LDA" = error_rate.lda.2,"Logistic Regression" = error_rate.log.2, "Random Forest" = error_rate.rf.2)
+error.2
+
+message("LDA Confusion matrix")
+confusion.lda.2
+
+message("Logistic RegressionConfusion matrix")
+confusion.log.2
+
+message("Random Forest Confusion matrix")
+confusion.rf.2
+```
+
+#### Case 3: 1 vs. 2
+
+In this case performance is also really good.  Random forestialso has the best performance again, with an error rate of  LDA has an error rate of 0.1 pct., Logistic Regression has an error rate of 0.3 pct. Generally the methods perform even better in Case 2, than Case 1. From the confusion matrix we see that allmost no errors are made, with random forrest only having one error.  Our prefered model in this case is the Random forest.
+
+```{r Validation error}
+error.3 <- data.frame("LDA" = error_rate.lda.3,"Logistic Regression" = error_rate.log.3, "Random Forest" = error_rate.rf.3)
+error.3
+
+message("LDA Confusion matrix")
+confusion.lda.3
+
+message("Logistic RegressionConfusion matrix")
+confusion.log.3
+
+message("Random Forest Confusion matrix")
+confusion.rf.3
+```
+
+
+### Estimating test error
+
+In all three cases Random forest was the best binary classifier. I will therefore estimate the test error, using these models and the test set wich has not been touched yet. We see that the test error for the three models are very low. For the model in Case 1 the error rate is 0.6 pct., 0.1 pct. for Case 2 and 0.9 pct. for Case 3. We also see in the confusion matrices that the types of errors are very evenly distributed. 
+```{r test error}
+
+#Case 1:
+# Performing prediction and calculating Confusion matrix and error rate for test set
+yhat.test.1 <- predict(rf.1,newdata = Xy.1[test_idx.1,])
+confusion.test.1 <- table(obs = Xy.1[test_idx.1,"y"], pred = yhat.test.1)
+error_rate.test.1 <- 1 - (sum(diag(confusion.test.1)) / sum(test_idx.1))
+
+
+#Case 2:
+# Performing prediction and calculating Confusion matrix and error rate for test set
+yhat.test.2 <- predict(rf.2,newdata = Xy.2[test_idx.2,])
+confusion.test.2 <- table(obs = Xy.2[test_idx.2,"y"], pred = yhat.test.2)
+error_rate.test.2 <- 1 - (sum(diag(confusion.test.2)) / sum(test_idx.2))
+
+
+#Case 3:
+# Performing prediction and calculating Confusion matrix and error rate for test set
+yhat.test.3 <- predict(rf.3,newdata = Xy.1[test_idx.3,])
+confusion.test.3 <- table(obs = Xy.1[test_idx.3,"y"], pred = yhat.test.3)
+error_rate.test.3 <- 1 - (sum(diag(confusion.test.3)) / sum(test_idx.3))
+
+
+Model <- c("Random Forest","Random Forest","Random Forest")
+error.test <- data.frame("Case 1" = error_rate.test.1,"Case 2" = error_rate.test.2, "Case 3" = error_rate.test.3)
+error.test <- rbind("Model" = Model, "Error Rate" = error.test)
+error.test
+
+message("Case 1 Confusion matrix")
+confusion.test.1
+
+message("Case 2 Confusion matrix")
+confusion.test.2
+
+message("Case 3 Confusion matrix")
+confusion.test.3
+
+```
 
 ## Multiclass classification
 
 In this section, you will develop a model to classify all three classes simultaneously. You should again try several different methods, and use model selection methods to determine which model is best. You should also be sure to keep a held-out test set to evaluate the performance of your model. (Side question: how could you use the binary models from the previous section to develop a multiclass classifier?)
 
-**YOUR CODE GOES HERE**
+## Our Code
+
+For multiclass classification we will use most of the methods from the binary task as they easily allow for multible classes. However, we will not use Logistic Regression even though it performs multiclass problems, as this has not been covered in the course. All the methods have already been described when performing binary classification.
+
+I start with Linear Discriminant (LDA) analysis. 
+```{r LDA}
+library(MASS)
+# Estimating LDA model and performing prediction
+lda.mul <- lda(y~.,Xy,subset = train_idx)
+yhat.lda.mul <- predict(lda.mul,newdata = Xy[test_idx,])
+
+# Calculating Confusion matrix
+confusion.lda.mul <- table(obs = y[test_idx], pred = yhat.lda.mul$class)
+error_rate.lda.mul <- 1 - (sum(diag(confusion.lda.mul)) / sum(test_idx))
+
+```
+
+I then estimate the KNN model
+
+```{r KNN mul}
+#### WARNING: This is computationally heavy and will take along time
+library(class)
+
+# We first find the optimal numbers of neighbors using 5-fold crossvailidation.
+K <- 5
+set.seed(1)
+# Generate indices of holdout observations
+holdout <- split(sample(1:length(train_idx)),1:K)
+
+# Initialize CV-error vectors
+CV_err <- rep(NaN,10)
+CV_err_temp <-rep(NaN,K)
+for(i in 1:10){
+
+for(k in 1:5){    
+# Create current training index
+cv_idx <- train_idx[-holdout[[k]]]  
+
+# Perform prediction
+pred.knn <- knn(Xy[cv_idx,1:784],Xy[holdout[[k]],1:784],Xy[cv_idx,"y"],k=i)
+
+# Calculate Confusion matrices and error rates
+confusion.knn.mul <- table(obs = y[holdout[[k]]], pred = pred.knn)
+CV_err_temp[k] <- 1 - (sum(diag(confusion.knn.mul)) / length(y[test_idx]))
+
+}
+  
+# Calculate mean error.
+CV_err[i] <- mean(CV_err_temp)
+}
+
+
+pred.knn <- knn(Xy[train_idx,1:784],Xy[test_idx,1:784],Xy[train_idx,"y"],k=2)
+
+
+confusion.knn.mul <- table(obs = y[test_idx], pred = pred.knn)
+error_rate.knn.mul <- 1 - (sum(diag(confusion.knn.mul)) / sum(test_idx))
+
+```
+
+We then estimate a Random Forest model
+```{r Random Forest mul}
+library(randomForest)
+
+set.seed(1)
+rf.mul <- randomForest(y~.,Xy,subset = train_idx, trees =100)
+yhat.rf.mul <- predict(rf.mul,newdata = Xy[val_idx,])
+
+confusion.rf.mul <- table(obs = y[val_idx], pred = yhat.rf.mul)
+error_rate.rf.mul <- 1 - (sum(diag(confusion.rf.mul)) / sum(val_idx))
+
+```
+
+
+
+### Method selection
+
+
+Below are all the confusion matrices and a table of the validation errors. We see that all the models generally perfom very well with a error rate of around 2 pct. for LDA and x. Random forest however has the lowest with an error rate of 0.7 pct. From the confusion matrix we see that all methods generally mistake pants for shirts more than shirts for pants.
+
+```{r Validation error mul}
+error.mul <- data.frame("LDA" = error_rate.lda.mul, "Random Forest" = error_rate.rf.mul)
+error.mul
+
+message("LDA Confusion matrix")
+confusion.lda.mul
+
+message("Random Forest Confusion matrix")
+confusion.rf.mul
+```
+
+
+### Estimating test error
+Random forest also turned out to be the best multiclass classifier. I will therefore estimate the test error, using the model and the hold outtest set. We see that the test error for the the models is very low. We also see in the confusion matrices that the types of errors are very evenly distributed. 
+```{r test error mul}
+
+# Performing prediction and calculating Confusion matrix and error rate for test set
+yhat.test.1 <- predict(rf.1,newdata = Xy.1[test_idx.1,])
+confusion.test.1 <- table(obs = Xy.1[test_idx.1,"y"], pred = yhat.test.1)
+error_rate.test.1 <- 1 - (sum(diag(confusion.test.1)) / sum(test_idx.1))
+```
+
+## Side Question:
+
+If we wanted to do multiclass classification using the binary classifcation models estimated in the second section, we would simply have to use each of the three binary models on the test data or new data that needs to be predicted, i.e. shoes vs. shirt, shirt vs. pants and pants vs. shoes. This would result in three predictions for each obeservation. Each prediction of a class is then counted as a vote on that class, and the class with the most vote becomes the final prediction. As the methods all produce posterior probabilities one could also average the probabilities from the three models and then pick the class with the highest probabilities as the prediction.
