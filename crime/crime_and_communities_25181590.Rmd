@@ -10,7 +10,7 @@ output:
 
 **Group Member 1 Name: **Khang V. Tran  **Group Member 1 SID: **25181590
 
-**Group Member 2 Name: **Christian Philip Hoeck   **Group Member 2 SID: **3035385003
+**Group Member 2 Name: **Christian Philip Hoeck **Group Member 2 SID: **3035385003
 
 The crime and communities dataset contains crime data from communities in the United States. The data combines socio-economic data from the 1990 US Census, law enforcement data from the 1990 US LEMAS survey, and crime data from the 1995 FBI UCR. More details can be found at https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized.
 
@@ -18,7 +18,13 @@ The dataset contains 125 columns total; $p=124$ predictive and 1 target (Violent
 
 Once downloaded (from bCourses), the data can be loaded as follows.
 
-```{r, message=FALSE, warning = FALSE}
+```{r, echo = F}
+num_folds <- 5
+seed <- 12345
+```
+
+
+```{r,message=F}
 library(readr)
 CC <- read_csv("../data_files/crime_and_communities_data.csv")
 print(dim(CC))
@@ -37,11 +43,10 @@ In this section, you should provide a thorough exploration of the features of th
 - Are there missing values in the data? How should these missing values be handled? 
 - Can the data be well-represented in fewer dimensions?
 
-**YOUR CODE GOES HERE**
 
 \newpage
 
-```{r, echo = FALSE, message=FALSE, warning=FALSE}
+```{r}
 library(dplyr)
 ```
 
@@ -60,7 +65,6 @@ any(is.na(X))
 
 Now, as we have detected that there exist feature(s) in X that contain NA, the next step is to find and remove features with high proportion of NA (50% or above) and remove them all together before process those that have an acceptable number of NA
 ```{r}
-
 get_na_perc <- function(x, n){
   return(sum(is.na(x))/n)
 }
@@ -78,7 +82,9 @@ get_feature_high_na <- function(features, threshold){
 
 feature_high_na <- get_feature_high_na(X, .5)
 print(feature_high_na)
-X <- X %>% select(-feature_high_na)
+# X <- X %>% dplyr::select(-feature_high_na)
+X <- X %>% dplyr::select(-feature_high_na)
+
 ```
 
 
@@ -147,7 +153,7 @@ library(ggplot2)
 
 
 ```{r, echo = FALSE}
-temp_df <- X %>% select(matches("Empl|Par|Pov")) %>% mutate(CrimeRate = y)
+temp_df <- X %>% dplyr::select(matches("Empl|Par|Pov")) %>% mutate(CrimeRate = y)
 # print(head(temp_df))
 ```
 
@@ -191,7 +197,7 @@ library(FactoMineR)
 
 Apply PCA
 ```{r}
-res.pca <- PCA(X = X,graph = F,ncp = 30)
+res.pca <- PCA(X = X,graph = F,ncp = 10)
 ```
 
 Plot Screeplot for Eigenvalues. Due to the very high number of components (125), we only pick out the first 20
@@ -218,7 +224,7 @@ lines(barchart, eigvalue, lwd = 2, col = "deepskyblue")
 As you can see, each of the eigencalue represents the amount of variance in the dataset that was captured by the corresponding PC. Also, let's examine the eigen value result overall
 
 ```{r}
-head(eig, n = 10)
+head(eig, n = 7)
 ```
 
 \newpage
@@ -231,7 +237,7 @@ With the given information above we can choose the number of component based on:
 
 - Jollie's rule $\lambda_k > 0.7$: the first 30 PCs
 
-- A, if we wish to keep the number of PCs that accumulatively capture 70% of the variance in the data, we can keep the first 10 PCs
+- If we wish to keep the number of PCs that accumulatively capture 77% of the variance in the data, we can keep the first 10 PCs
 
 
 
@@ -248,15 +254,36 @@ PCs <- res.pca$ind$coord
 print(head(PCs, 3))
 ```
 
+## Explore the target: Crime Rate per Population
+
+After exploring the feature, we should also take the target Crime Rate per Population into consideration. First, let's take a look at the summary and the density plot.
+
+```{r}
+summary(y)
+```
+
+```{r}
+hist(y, main = "Histogram of Violent Crime Rate per Population")
+```
+
+As we can see, Crime rate per population is heavily left skewed. In order to archieve a better distribution, let's try taking log transformation of the target
+
+```{r}
+y <- log(y)
+y[is.infinite(y)] = 0
+hist(y, main = "Histogram of Log of Violent Crime Rate per Population")
+
+```
+
+And now, we have a much better distribution. In the next steps, all operations will be done on this data. 
 
 
 \newpage
 
 # Part 2) Regression task
 
-In this section, you should use the techniques learned in class to develop a model to predict ViolentCrimesPerPop using the 124 features (or some subset of them) stored in $\mathbf{X}$. Remember that you should try several different methods, and use model selection methods to determine which model is best. You should also be sure to keep a held-out test set to evaluate the performance of your model.
+In this section, we use the techniques learned in class to develop a model to predict ViolentCrimesPerPop using the 124 features (or some subset of them) stored in $\mathbf{X}$. We try several different methods, and use model selection methods to determine which model is best. We keep a held-out test set to evaluate the performance of our model.
 
-**YOUR CODE GOES HERE**
 
 ## Part 2.1) Train - Test - Validation Data Randomization
 
@@ -266,7 +293,11 @@ In order to perform hyperparameter tuning within a model and model selecting, we
 - Validation: 20% of the data
 - Test: 20% of the data
 
-We will then performed training, and hyperparameter selection
+The train set will be used in two steps. The first step is to perform intial training and visualization. The next one is to perform k-folds cross validation for hyperparameter tuning. We will apply multiple regression algorithms and determine the best configuration (hyper parameters) for each of them
+
+The Validation set will be used for model selection. Meaning, we apply all of the algorithms in the previous step with theit optimal hyperparameters, then compare the result together to determine which one perform the best
+
+Finally, we take the winning model the regress it onto the test set. This is equivalent to proceed into production
 
 ```{r}
 n <- nrow(X)
@@ -277,6 +308,8 @@ train_indices <- sample(x = indices, size = round(.6*n))
 train_pcs <- PCs[train_indices, ]
 train_features <- X[train_indices, ]
 train_target <- y[train_indices]
+train_data <- data.frame(cbind(train_features, train_target))
+names(train_data)[ncol(train_data)] <- "LogViolentCrimesPerPop"
 
 # randomize 20% of the original data to be the validation test
 # (50% of the remaining data after sampling the train set)
@@ -292,15 +325,111 @@ test_indices <- sample(x = indices[c(-train_indices,
 validation_pcs <- PCs[validation_indices, ]
 validation_features <- X[validation_indices, ]
 validation_target <- y[validation_indices]
-
 ```
 
 \newpage
 
 ## Part 2.2) Training Phase
- 
+
+We take this step to give an overall view of each of the regression techniques  used in this project. We will fit the model, visualize the result. Some algorithms will involves regularization.
+
+### OLS Regression
+
+```{r}
+linear_model <- lm(formula = LogViolentCrimesPerPop ~ . ,
+                   data = train_data)
+```
+
+```{r, echo = F}
+plot(linear_model, which = 1)
+```
+
+The residuals vs fitted value plot above tests whether there is a linear relationship between features, and whether there is equal varianve across the regression line. The plot aboves shows that most data points are assymetrical around the 0 line, with the right tail being less densedn compared to the left one. However, there are outliers spotted. Hence, we conclude there is a weak linear relation between variables
+
+```{r}
+plot(linear_model, which = 2)
+```
+
+The QQ plot shown above helps us examine whether the actual distribution has the same shape as our theortical distribution. The data lies on QQ line mostly, which is consistent with our observation of gaussian from the historogram of log Crime Rate per Population. However, there are outliers exist at the two ends. We conclude the same as above
+
+### Principal Componant Regression (PCR)
+
+```{r, echo = FALSE, warning=F, message=F}
+library(pls)
+```
+
+```{r}
+# pcr_model <- pcr(LogViolentCrimesPerPop ~ .,
+#                  m = 10,
+#                  data = train_data)
+# 
+# names(pcr_model)
+```
+
+```{r}
+# coeff <- pcr_model$coefficients
+# dim(coeff)
+```
+
+
 ## Part 2.3) Hyper Parameter Tuning
+
+### OLS Regression
+
+Due to the nature of OLS, we get exactly one solution. There is no hyperparameter tuning
+
+### Principal Componant Analysis: tune number of component
+
+```{r, echo = F, message=F, warning=F}
+library(plsdof)
+```
+
+We runs k-folds cross validation with k = 5 on hyperparameter m (number of principal componants) from 1 to 30. We will see what is the optimal number of PCs for our regression
+
+```{r}
+set.seed(seed)
+pcr_cv <- pcr.cv(train_features, train_target, k=num_folds,
+       m = 10, groups=NULL, scale=F, eps=0.000001,
+       plot.it = T)
+```
+
+
+```{r}
+(optima_num_cp <- unname(which(pcr_cv$cv.error == min(pcr_cv$cv.error))-1))
+```
+
+As we see above, the number of principal component that leads to the minimal error is 10
+
+### Ridge Regression: Lambda term
+
+```{r, echo = F, message=F, warning=F}
+library( glmnet)
+```
+
+```{r}
+set.seed(seed)
+(ridge_cv <- cv.glmnet(x = train_features, y = train_target, alpha = 0,
+          nfolds = num_folds, parallel = T ))
+```
+
+```{r}
+(optimal_lambda_ridge <- ridge_cv$lambda.min)
+```
  
+### Lasso Regression: Lambda term
+
+```{r}
+set.seed(seed)
+(lasso_cv <- cv.glmnet(x = train_features, y = train_target, alpha = 1,
+          nfolds = num_folds, parallel = T ))
+```
+
+```{r}
+(optimal_lambda_lasso <- lasso_cv$lambda.min)
+
+```
+
+
 ## Part 2.4) Model Selection
  
 ## Part 2.5) Final Model
