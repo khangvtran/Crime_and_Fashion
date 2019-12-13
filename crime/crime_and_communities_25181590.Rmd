@@ -19,7 +19,7 @@ The dataset contains 125 columns total; $p=124$ predictive and 1 target (Violent
 Once downloaded (from bCourses), the data can be loaded as follows.
 
 ```{r, echo = F}
-num_folds <- 5
+num_folds <- 10
 seed <- 12345
 ```
 
@@ -400,7 +400,7 @@ pcr_cv <- pcr.cv(train_features, train_target, k=num_folds,
 
 As we see above, the number of principal component that leads to the minimal error is 10
 
-### Ridge Regression: Lambda term
+### Ridge Regression: tune Lambda term
 
 ```{r, echo = F, message=F, warning=F}
 library( glmnet)
@@ -416,7 +416,7 @@ set.seed(seed)
 (optimal_lambda_ridge <- ridge_cv$lambda.min)
 ```
  
-### Lasso Regression: Lambda term
+### Lasso Regression: tune Lambda term
 
 ```{r}
 set.seed(seed)
@@ -426,7 +426,77 @@ set.seed(seed)
 
 ```{r}
 (optimal_lambda_lasso <- lasso_cv$lambda.min)
+```
 
+### K- Nearest Neighbors: tune number of neighbors
+```{r, echo = F, message=F, warning=F}
+library(caret)
+```
+
+```{r}
+set.seed(seed)
+
+train_control <- trainControl(method = "cv",
+                              number = num_folds)
+num_neighbors = 1:15
+
+tune_grid = expand.grid(k = num_neighbors)
+
+(knn_cv <- train(x = train_pcs, y = train_target, method = "knn", 
+      trControl = train_control, metric = "RMSE",
+      tuneGrid = tune_grid))
+```
+
+```{r}
+(temp <- knn_cv$results %>% filter(RMSE == min(RMSE)))
+
+optimal_num_neighbors <- temp[, "k"]
+
+optimal_rmse <- temp[, "RMSE"]
+```
+
+```{r, echo = F}
+ggplot(data = knn_cv$results) + 
+  geom_line(aes(x = k, y = RMSE), color = "steelblue4") + 
+  geom_point(aes(x = k, y = RMSE)) + 
+  geom_point(aes(x = optimal_num_neighbors, y = optimal_rmse), color = "red", size = 3) + 
+  scale_x_continuous(breaks = num_neighbors) +
+  labs(title = "Mean Square Error with Respect to Number of Neighbors",
+       x = "Number of Neighbors", y = "Mean Square Error")
+```
+
+### Decision Tree
+
+
+Method "rpart" is only capable of tuning the cp, method "rpart2" is used for maxdepth. There is no tuning for minsplit or any of the other rpart controls. If you want to tune on different options you can write a custom model to take this into account.
+
+Click here for more info on how to do this. Also read this answer about how to use the rpart control within the train function.
+
+```{r}
+train_control <- trainControl(method = "cv",
+                              number = num_folds)
+
+max_depth = 3:20
+
+tune_grid = expand.grid(maxdepth = max_depth)
+
+train(x = train_pcs, y = train_target, method = "rpart2", 
+      trControl = train_control, metric = "RMSE", tuneGrid = tune_grid)
+```
+
+
+### Random Forest
+
+```{r}
+train_control <- trainControl(method = "cv",
+                              number = num_folds)
+
+max_depth = 3:20
+
+tune_grid = expand.grid(maxdepth = max_depth)
+
+train(x = train_pcs, y = train_target, method = "rpart2", 
+      trControl = train_control, metric = "RMSE", tuneGrid = tune_grid)
 ```
 
 
