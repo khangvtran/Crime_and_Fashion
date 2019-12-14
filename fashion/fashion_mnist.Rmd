@@ -734,7 +734,7 @@ confusion.rf.mul
 
 
 ### Estimating test error
-Random forest also turned out to be the best multiclass classifier. We will therefore estimate the test error, using the model and the hold outtest set. We train a random forest model on the combined training and validation set, and estiamte the out-of-sample error rate using the test set. We see that the test error for the the models is very low. We also see in the confusion matrices that the types of errors are very evenly distributed. 
+Random forest also turned out to be the best multiclass classifier. We train a random forest model on the combined training and validation set, and estiamte the out-of-sample error rate using the test set. We see that the test error for the the models is 0.4 pct.  As mentioned before, it is clear from the confusion matrix, that the hardest task is discriminating shirts and pants. This was the one binary task random forest was best at, which is the reason why it is the best multiclass classifier for this dataset. 
 ```{r test error mul}
 
 #### WARNING: This is computationally heavy and will take along time
@@ -743,9 +743,12 @@ train_val.idx <- rbind(train_idx,val_idx)
 
 # Performing prediction and calculating Confusion matrix and error rate for test set
 rf.mul.test <- randomForest(y~.,Xy,subset = train_val.idx)
-yhat.test.mul <- predict(rf.mul.test,newdata = Xy.1[test_idx.1,])
-confusion.test.mul <- table(obs = Xy.1[test_idx.1,"y"], pred = yhat.test.1)
-error_rate.test.mul <- 1 - (sum(diag(confusion.test.1)) / sum(test_idx.1))
+yhat.test.mul <- predict(rf.mul.test,newdata = Xy[test_idx,])
+confusion.test.mul <- table(obs = Xy[test_idx,"y"], pred = yhat.test.mul)
+error_rate.test.mul <- 1 - (sum(diag(confusion.test.mul)) / length(test_idx))
+
+error_rate.test.mul
+confusion.test.mul
 ```
 
 ## Side Question:
