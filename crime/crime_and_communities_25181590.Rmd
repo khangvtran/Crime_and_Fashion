@@ -476,27 +476,83 @@ Click here for more info on how to do this. Also read this answer about how to u
 train_control <- trainControl(method = "cv",
                               number = num_folds)
 
-max_depth = 3:20
+max_depth = 3:14
 
 tune_grid = expand.grid(maxdepth = max_depth)
 
-train(x = train_pcs, y = train_target, method = "rpart2", 
-      trControl = train_control, metric = "RMSE", tuneGrid = tune_grid)
+(tree_cv <- train(x = train_features, y = train_target, method = "rpart2", 
+      trControl = train_control, metric = "RMSE", tuneGrid = tune_grid))
+```
+
+```{r, echo = FALSE}
+(temp <- tree_cv$results %>% filter(RMSE == min(RMSE)))
+
+optimal_maxdepth <- temp[, "maxdepth"]
+
+optimal_rmse <- temp[, "RMSE"]
+```
+
+
+```{r, echo = F}
+ggplot(data = tree_cv$results) + 
+  geom_line(aes(x = maxdepth, y = RMSE), color = "steelblue4") + 
+  geom_point(aes(x = maxdepth, y = RMSE)) + 
+  geom_point(aes(x = optimal_maxdepth, y = optimal_rmse), color = "red", size = 3) + 
+  scale_x_continuous(breaks = max_depth) +
+  labs(title = "Mean Square Error with Respect to Maximum Depth",
+       x = "Max Depth of Tree", y = "Mean Square Error")
 ```
 
 
 ### Random Forest
 
 ```{r}
+set.seed(seed)
 train_control <- trainControl(method = "cv",
                               number = num_folds)
 
-max_depth = 3:20
+sqrt_p <- round(sqrt(ncol(train_features)))
+mtry <- (sqrt_p - 2) : (sqrt_p + 2)
+tune_grid = expand.grid(mtry = mtry)
 
-tune_grid = expand.grid(maxdepth = max_depth)
+(rf_cv <- train(x = train_features, y = train_target, method = "rf", 
+      trControl = train_control, metric = "RMSE",
+      tuneGrid = tune_grid))
+```
 
-train(x = train_pcs, y = train_target, method = "rpart2", 
-      trControl = train_control, metric = "RMSE", tuneGrid = tune_grid)
+```{r}
+(temp <- rf_cv$results %>% filter(RMSE == min(RMSE)))
+
+optimal_mtry<- temp[, "mtry"]
+
+optimal_rmse <- temp[, "RMSE"]
+```
+
+
+```{r, echo = F}
+ggplot(data = rf_cv$results) + 
+  geom_line(aes(x = mtry, y = RMSE), color = "steelblue4") + 
+  geom_point(aes(x = mtry, y = RMSE)) + 
+  geom_point(aes(x = optimal_mtry, y = optimal_rmse), color = "red", size = 3) + 
+  scale_x_continuous(breaks = mtry) +
+  labs(title = "Mean Square Error with Respect to Number of Features sampled",
+       x = "Number of Features", y = "Mean Square Error")
+```
+
+
+```{r}
+tune_grid = expand.grid(mtry = 12)
+
+for (num_tree in c(100, 500, 600)){
+ rf_cv_temp <- train(x = train_features, y =train_target,
+        method = "rf", metric = "RMSE",
+        tree = num_tree,
+        tuneGrid = tune_grid,
+        trControl = train_control)
+  
+  print(rf_cv_temp$results %>% filter(RMSE == min(RMSE)))
+
+}
 ```
 
 
