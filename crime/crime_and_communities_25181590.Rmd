@@ -358,19 +358,6 @@ The QQ plot shown above helps us examine whether the actual distribution has the
 library(pls)
 ```
 
-```{r}
-# pcr_model <- pcr(LogViolentCrimesPerPop ~ .,
-#                  m = 10,
-#                  data = train_data)
-# 
-# names(pcr_model)
-```
-
-```{r}
-# coeff <- pcr_model$coefficients
-# dim(coeff)
-```
-
 
 ## Part 2.3) Hyper Parameter Tuning
 
@@ -395,7 +382,7 @@ pcr_cv <- pcr.cv(train_features, train_target, k=num_folds,
 
 
 ```{r}
-(optima_num_cp <- unname(which(pcr_cv$cv.error == min(pcr_cv$cv.error))-1))
+(optimal_num_pc <- unname(which(pcr_cv$cv.error == min(pcr_cv$cv.error))-1))
 ```
 
 As we see above, the number of principal component that leads to the minimal error is 10
@@ -557,6 +544,93 @@ for (num_tree in c(100, 500, 600)){
 
 
 ## Part 2.4) Model Selection
+
+### OLS Regression
+
+```{r, echo = F, warning=F}
+lm_model <- lm(train_target ~ train_features)
+lm_preds <- predict(object = lm_model, newdata = data.frame(validation_features), )
+(lm_mse <- mean((lm_preds - validation_target)^2))
+```
+
+
+### Principal Componant Regression
+```{r, message=F, warning=F}
+library(pls)
+library(analogue)
+```
+
+```{r}
+
+pcr_model <- pcr(x = train_features, y = train_target, ncomp = optimal_num_pc) # library(analogue needed)
+pcr_preds <- predict(object = pcr_model, newdata = validation_features)
+(pcr_mse <- mean((pcr_preds - validation_target)^2))
+```
+
+### Ridge Regression
+
+```{r}
+ridge_model <- glmnet(x = train_features, y = train_target,
+                      alpha = 0,lambda = optimal_lambda_ridge)
+ridge_preds <- predict(object = ridge_model, newx = validation_features)
+(ridge_mse <- mean((ridge_preds - validation_target)^2))
+```
+
+
+```{r}
+lasso_model <- glmnet(x = train_features, y = train_target,
+                      alpha = 1, lambda = optimal_lambda_lasso)
+lasso_preds <- predict(object = lasso_model, newx = validation_features)
+(lasso_mse <- mean((lasso_preds - validation_target)^2))
+```
+
+ ### K Nearest Neighbor Regression
+```{r, echo=F, error=F, message=F}
+library(FNN)
+```
  
+```{r}
+knn <- knn.reg(train = train_features, test = validation_features,
+        y = train_target, k = optimal_num_neighbors)
+knn_preds <- knn$pred
+(knn_mse <- mean((knn_preds - validation_target)^2))
+```
+ 
+### Decision Tree
+```{r, echo = F}
+library(rpart)
+
+```
+
+```{r}
+tree_model <- rpart(formula = LogViolentCrimesPerPop~. , data = train_data,
+                    control = rpart.control(maxdepth = optimal_maxdepth) )
+tree_preds <- predict(object = tree_model, newdata = data.frame(validation_features))
+tree_mse <- mean((tree_preds - validation_target)^2)
+```
+ 
+ 
+### Random Forest
+
+```{r}
+
+```
+
+
 ## Part 2.5) Final Model
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
