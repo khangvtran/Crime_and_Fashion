@@ -158,7 +158,7 @@ temp_df <- X %>% dplyr::select(matches("Empl|Par|Pov")) %>% mutate(CrimeRate = y
 ```
 
 
-```{r}
+```{r, echo=F}
 ggplot(data = temp_df) + 
   geom_point(aes(x = PctUnemployed, color = CrimeRate, y = 1/PctKids2Par)) +
   scale_color_gradient(low = "pink", high = "black") + 
@@ -169,7 +169,7 @@ ggplot(data = temp_df) +
 
 \newpage
 
-```{r}
+```{r, echo=F}
 ggplot(data = temp_df) +
   geom_point(aes(x = PctPopUnderPov, y = CrimeRate, alpha = 0.3)) + 
   xlab("Percentage under Poverty") +
@@ -300,6 +300,7 @@ The Validation set will be used for model selection. Meaning, we apply all of th
 Finally, we take the winning model the regress it onto the test set. This is equivalent to proceed into production
 
 ```{r}
+set.seed(seed)
 n <- nrow(X)
 indices <- 1:n
 
@@ -547,10 +548,10 @@ for (num_tree in c(100, 500, 600)){
 
 ### OLS Regression
 
-```{r, echo = F, warning=F}
-lm_model <- lm(train_target ~ train_features)
-lm_preds <- predict(object = lm_model, newdata = data.frame(validation_features), )
-(lm_mse <- mean((lm_preds - validation_target)^2))
+```{r, echo = F}
+lm_model <- lm(formula = LogViolentCrimesPerPop ~., data = train_data)
+lm_preds  <- predict(object = lm_model, newdata = data.frame(validation_features))
+lm_mse <- mean((lm_preds - validation_target)^2)
 ```
 
 
@@ -560,28 +561,32 @@ library(pls)
 library(analogue)
 ```
 
-```{r}
-
-pcr_model <- pcr(x = train_features, y = train_target, ncomp = optimal_num_pc) # library(analogue needed)
-pcr_preds <- predict(object = pcr_model, newdata = validation_features)
-(pcr_mse <- mean((pcr_preds - validation_target)^2))
+```{r, echo=F}
+# pcr_model <- pcr(x = train_features, y = train_target, ncomp = optimal_num_pc) # library(analogue needed)
+# pcr_preds <- predict(object = pcr_model, newdata = validation_features, ncomp = optimal_num_pc)
+# pcr_mse <- mean((pcr_preds - validation_target)^2)
+# 
+# pcr_model <- pcr(X = train_features, y = train_target, scale = F, m = optimal_num_pc)
+# dim(pcr_model$coefficients)
+# dim(validation_features)
+# predict.pcr()
 ```
 
 ### Ridge Regression
 
-```{r}
+```{r, echo=F}
 ridge_model <- glmnet(x = train_features, y = train_target,
                       alpha = 0,lambda = optimal_lambda_ridge)
 ridge_preds <- predict(object = ridge_model, newx = validation_features)
-(ridge_mse <- mean((ridge_preds - validation_target)^2))
+ridge_mse <- mean((ridge_preds - validation_target)^2)
 ```
 
 
-```{r}
+```{r, echo = F}
 lasso_model <- glmnet(x = train_features, y = train_target,
                       alpha = 1, lambda = optimal_lambda_lasso)
 lasso_preds <- predict(object = lasso_model, newx = validation_features)
-(lasso_mse <- mean((lasso_preds - validation_target)^2))
+lasso_mse <- mean((lasso_preds - validation_target)^2)
 ```
 
  ### K Nearest Neighbor Regression
@@ -589,30 +594,49 @@ lasso_preds <- predict(object = lasso_model, newx = validation_features)
 library(FNN)
 ```
  
-```{r}
+```{r, echo = F}
 knn <- knn.reg(train = train_features, test = validation_features,
         y = train_target, k = optimal_num_neighbors)
 knn_preds <- knn$pred
-(knn_mse <- mean((knn_preds - validation_target)^2))
+knn_mse <- mean((knn_preds - validation_target)^2)
 ```
  
 ### Decision Tree
 ```{r, echo = F}
 library(rpart)
-
 ```
 
-```{r}
+```{r, echo = F}
 tree_model <- rpart(formula = LogViolentCrimesPerPop~. , data = train_data,
                     control = rpart.control(maxdepth = optimal_maxdepth) )
 tree_preds <- predict(object = tree_model, newdata = data.frame(validation_features))
 tree_mse <- mean((tree_preds - validation_target)^2)
 ```
  
- 
 ### Random Forest
 
-```{r}
+```{r, echo = F}
+train_control <- trainControl(method = "none")
+rf_model <- train(x = train_features, y = train_target,
+                  method = "rf", trControl = train_control)
+rf_preds <- predict(object = rf_model, newdata = validation_features)
+rf_mse <- mean((rf_preds - validation_target)^2)
+```
+
+### All Mean Square Error
+```{r, echo = F}
+(mse_df <- data.frame("Linear"= lm_mse,
+                      "Ridge" = ridge_mse, "Lasso" = lasso_mse,
+                      "KNN" = knn_mse, "Tree" = tree_mse, "RandomForest" = rf_mse))
+
+```
+
+
+
+```{r, echo = F}
+target_df <- data.frame("Target" = validation_target, "OLS" = lm_preds,
+                         "Ridge" = as.numeric(ridge_preds), "Lasso" = as.numeric(lasso_preds),
+                         "KNN" = knn_preds, "Tree" = tree_preds, "RandomForest" = rf_preds)
 
 ```
 
