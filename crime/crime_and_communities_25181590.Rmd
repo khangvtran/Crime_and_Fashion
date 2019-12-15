@@ -1,4 +1,4 @@
----
+ ---
 title: "Crime and Communities"
 output:
   pdf_document: default
@@ -323,9 +323,9 @@ validation_target <- y[validation_indices]
 # use the rest of the data (20% of the original dataset) to be the final dataset
 test_indices <- sample(x = indices[c(-train_indices,
                                      -validation_indices)])
-validation_pcs <- PCs[validation_indices, ]
-validation_features <- X[validation_indices, ]
-validation_target <- y[validation_indices]
+test_pcs <- PCs[test_indices, ]
+test_features <- X[test_indices, ]
+test_target <- y[test_indices]
 ```
 
 \newpage
@@ -548,7 +548,7 @@ for (num_tree in c(100, 500, 600)){
 
 ### OLS Regression
 
-```{r, echo = F}
+```{r}
 lm_model <- lm(formula = LogViolentCrimesPerPop ~., data = train_data)
 lm_preds  <- predict(object = lm_model, newdata = data.frame(validation_features))
 lm_mse <- mean((lm_preds - validation_target)^2)
@@ -574,15 +574,15 @@ library(analogue)
 
 ### Ridge Regression
 
-```{r, echo=F}
+```{r}
 ridge_model <- glmnet(x = train_features, y = train_target,
                       alpha = 0,lambda = optimal_lambda_ridge)
 ridge_preds <- predict(object = ridge_model, newx = validation_features)
 ridge_mse <- mean((ridge_preds - validation_target)^2)
 ```
 
-
-```{r, echo = F}
+### Lasso Regression
+```{r}
 lasso_model <- glmnet(x = train_features, y = train_target,
                       alpha = 1, lambda = optimal_lambda_lasso)
 lasso_preds <- predict(object = lasso_model, newx = validation_features)
@@ -594,7 +594,7 @@ lasso_mse <- mean((lasso_preds - validation_target)^2)
 library(FNN)
 ```
  
-```{r, echo = F}
+```{r}
 knn <- knn.reg(train = train_features, test = validation_features,
         y = train_target, k = optimal_num_neighbors)
 knn_preds <- knn$pred
@@ -606,7 +606,7 @@ knn_mse <- mean((knn_preds - validation_target)^2)
 library(rpart)
 ```
 
-```{r, echo = F}
+```{r}
 tree_model <- rpart(formula = LogViolentCrimesPerPop~. , data = train_data,
                     control = rpart.control(maxdepth = optimal_maxdepth) )
 tree_preds <- predict(object = tree_model, newdata = data.frame(validation_features))
@@ -615,7 +615,7 @@ tree_mse <- mean((tree_preds - validation_target)^2)
  
 ### Random Forest
 
-```{r, echo = F}
+```{r}
 train_control <- trainControl(method = "none")
 rf_model <- train(x = train_features, y = train_target,
                   method = "rf", trControl = train_control)
@@ -642,6 +642,21 @@ target_df <- data.frame("Target" = validation_target, "OLS" = lm_preds,
 
 
 ## Part 2.5) Final Model
+
+```{r}
+train_validation_features <- rbind(train_features, validation_features)
+train_validation_target <- c(train_target, validation_target)
+```
+
+```{r}
+train_control <- trainControl(method = "none")
+rf_final_model <- train(x = train_validation_features, y = train_validation_target,
+                  method = "rf", trControl = train_control)
+rf_preds <- predict(object = rf_final_model, newdata = test_features)
+```
+
+
+
 
 
 
