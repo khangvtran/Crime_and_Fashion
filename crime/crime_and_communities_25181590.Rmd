@@ -1,0 +1,675 @@
+ ---
+title: "Crime and Communities"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+
+
+**Group Member 1 Name: **Khang V. Tran  **Group Member 1 SID: **25181590
+
+**Group Member 2 Name: **Christian Philip Hoeck **Group Member 2 SID: **3035385003
+
+The crime and communities dataset contains crime data from communities in the United States. The data combines socio-economic data from the 1990 US Census, law enforcement data from the 1990 US LEMAS survey, and crime data from the 1995 FBI UCR. More details can be found at https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized.
+
+The dataset contains 125 columns total; $p=124$ predictive and 1 target (ViolentCrimesPerPop). There are $n=1994$ observations. These can be arranged into an $n \times p = 1994 \times 127$ feature matrix $\mathbf{X}$, and an $n\times 1 = 1994 \times 1$ response vector $\mathbf{y}$ (containing the observations of ViolentCrimesPerPop).
+
+Once downloaded (from bCourses), the data can be loaded as follows.
+
+```{r, echo = F}
+num_folds <- 10
+seed <- 12345
+```
+
+
+```{r,message=F}
+library(readr)
+CC <- read_csv("../data_files/crime_and_communities_data.csv")
+print(dim(CC))
+y <- CC$ViolentCrimesPerPop
+X <- subset(CC, select = -c(ViolentCrimesPerPop))
+```
+
+
+# Part 1) Dataset Exploration - Feature Creating and Engineering
+
+In this section, you should provide a thorough exploration of the features of the dataset. Things to keep in mind in this section include:
+
+- Which variables are categorical versus numerical?
+- What are the general summary statistics of the data? How can these be visualized?
+- Is the data normalized? Should it be normalized?
+- Are there missing values in the data? How should these missing values be handled? 
+- Can the data be well-represented in fewer dimensions?
+
+
+\newpage
+
+```{r}
+library(dplyr)
+```
+
+
+## Missing Data Processing
+
+check if target y contains missing data
+```{r}
+any(is.na(y))
+```
+
+check if any of the features contains missing data
+```{r}
+any(is.na(X))
+```
+
+Now, as we have detected that there exist feature(s) in X that contain NA, the next step is to find and remove features with high proportion of NA (50% or above) and remove them all together before process those that have an acceptable number of NA
+```{r}
+get_na_perc <- function(x, n){
+  return(sum(is.na(x))/n)
+}
+
+get_na_perc_all_features <- function(features){
+  n = nrow(features)
+  perc <- apply(X = features, MARGIN = 2, FUN = function(x) sum(is.na(x))/n)
+  return(perc)
+}
+
+get_feature_high_na <- function(features, threshold){
+  perc <- get_na_perc_all_features(features)
+  return(names(perc[perc >= threshold]))
+}
+
+feature_high_na <- get_feature_high_na(X, .5)
+print(feature_high_na)
+# X <- X %>% dplyr::select(-feature_high_na)
+X <- X %>% dplyr::select(-feature_high_na)
+
+```
+
+
+Now that we have only feature with none or a low number of NA left, let's replace the mising values with the median
+```{r}
+X <- X %>% mutate_all(function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x))
+any(is.na(X))
+```
+
+\newpage
+
+## Examine Categorical vs. Quantitative data
+
+```{r, results="hide"}
+str(X)
+```
+
+By examine the structure of the data using str() (result not shown due to exessive printing) we can explore the datatype of each feature. So far, we are be able to see that there is no factor type, which means there is no string categorical feature. Neither str() nor apply(class) shows any factor. Just to be certain, I examine the documentation from the source (UC Irvine): https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized and did not find any character nor factor class. However, more examination is needed since there might be numerical catergorical data.
+
+
+```{r}
+hist(X$householdsize)
+print(head(X$householdsize, n = 20))
+```
+
+By plotting histogram, we can pick out some categorical-likely feature. One of them is $householdsize$. However, when verifying with the documentation, we see that $householdsize$ is actually  the mean people per household (numeric - decimal). By printing out the first few values, we are able to confirm this. Therefore, it is not categorical
+
+
+
+```{r}
+hist(X$MedNumBR)
+print(head(X$MedNumBR))
+```
+
+The next candidate is $MedNumBR$. This is, indeed, categorical and we can confirm this by once again using histogram and by printing out the first few values. However, since this is numerical, it does not matter if this is categorical. We leave it as is.
+
+There exist in the original data the feature of states, county code, and community code, which are catergorical. However, they are not included in the given data. On the other hads, all other quantitative features in the original data are. We can say that the data set is entirely quantitative.
+
+\newpage
+
+## Summary Statistics 
+
+When speaking about crimes, there are factors that need to be taken into consideration. They are Unemployment, Children of Single Parent, Homelessness/Rent, and Poverty. Due to the high number of feature, we will only select a few feature that will give a very general idea about some of these factors
+
+```{r}
+interesting_features <- c("PctUnemployed", "NumKidsBornNeverMar", "MedRentPctHousInc", "PctPopUnderPov")
+
+summary_stat <- function(features, selection){
+  stats <- apply(X = features[, selection], MARGIN = 2, FUN = summary)
+  return(stats)
+}
+
+summary_stat(X, interesting_features)
+```
+
+
+\newpage
+
+## Visualization
+
+Due to such as massive number of feature, there is no way to visualize data from every feature without dimentionality reduction. In the next coming graphs, we only examine some groups of feature that will hopefully tell us something about the data.
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+```
+
+
+```{r, echo = FALSE}
+temp_df <- X %>% dplyr::select(matches("Empl|Par|Pov")) %>% mutate(CrimeRate = y)
+# print(head(temp_df))
+```
+
+
+```{r, echo=F}
+ggplot(data = temp_df) + 
+  geom_point(aes(x = PctUnemployed, color = CrimeRate, y = 1/PctKids2Par)) +
+  scale_color_gradient(low = "pink", high = "black") + 
+  xlab("Unemployment Rate") +
+  ylab("Single Parent Househole Rate") +
+  ggtitle("Crime Rate with respect to Unemployment rate and Single Parent Family Rate")
+```
+
+\newpage
+
+```{r, echo=F}
+ggplot(data = temp_df) +
+  geom_point(aes(x = PctPopUnderPov, y = CrimeRate, alpha = 0.3)) + 
+  xlab("Percentage under Poverty") +
+  ggtitle("Crime Rate with respect to Poverty")
+```
+
+As we can see, there is a correlation between crime and poverty as well as crime and unemployment. However, these relartionship are not exactly linear.
+
+\newpage
+
+
+## Data Normalization - Scaling
+
+After the previous step of examination, it is obvious that many features are different in nature. For example, some feautures are Percentage (PctForeignBorn, PctBornSameState). Some are counts (NumInShelters, population). Some are in US Dollars (MedRent, ...). Each of the features have different range, scale, and unit. Such condition will affect how much each of the feature influence the predition later on .Therefore, it is highly crucial that we normalize the features.
+
+```{r}
+X <- scale(X)
+```
+
+## Dimensionality reduction - Principal Component Analysis
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+library(FactoMineR)
+```
+
+Apply PCA
+```{r}
+res.pca <- PCA(X = X,graph = F,ncp = 10)
+```
+
+Plot Screeplot for Eigenvalues. Due to the very high number of components (125), we only pick out the first 20
+
+```{r}
+eig <- res.pca$eig
+```
+
+Visualize Eigenvalue
+```{r}
+eigvalue <- eig[1:15, "eigenvalue"]
+
+barchart <- barplot(eigvalue, las = 1, border = NA,
+                    names.arg = 1:length(eigvalue),
+                    ylim = c(0, 1.1 * ceiling(max(eigvalue))), 
+                    ylab = "value",
+                    xlab = "Eigenvalues - how much variance the corresponding PC captures", 
+                    main = "Scree plot")
+
+points(barchart, eigvalue, pch = 19, col = "deepskyblue4") 
+lines(barchart, eigvalue, lwd = 2, col = "deepskyblue")
+```
+
+As you can see, each of the eigencalue represents the amount of variance in the dataset that was captured by the corresponding PC. Also, let's examine the eigen value result overall
+
+```{r}
+head(eig, n = 7)
+```
+
+\newpage
+
+With the given information above we can choose the number of component based on:
+
+- Elbow method: the first 6 PCs
+
+- Kaiser's rule $\lambda_k > 1$: the first 20 PCs
+
+- Jollie's rule $\lambda_k > 0.7$: the first 30 PCs
+
+- If we wish to keep the number of PCs that accumulatively capture 77% of the variance in the data, we can keep the first 10 PCs
+
+
+
+```{r, echo = FALSE}
+p <- PCA(X[, 1:10], graph = F)
+# p <- PCA(X, graph = F)
+plot(p,choix="var",new.plot=FALSE)
+```
+
+
+```{r}
+# names(PCs) # "coord"   "cor"     "cos2"    "contrib"
+PCs <- res.pca$ind$coord
+print(head(PCs, 3))
+```
+
+## Explore the target: Crime Rate per Population
+
+After exploring the feature, we should also take the target Crime Rate per Population into consideration. First, let's take a look at the summary and the density plot.
+
+```{r}
+summary(y)
+```
+
+```{r}
+hist(y, main = "Histogram of Violent Crime Rate per Population")
+```
+
+As we can see, Crime rate per population is heavily left skewed. In order to archieve a better distribution, let's try taking log transformation of the target
+
+```{r}
+y <- log(y)
+y[is.infinite(y)] = 0
+hist(y, main = "Histogram of Log of Violent Crime Rate per Population")
+
+```
+
+And now, we have a much better distribution. In the next steps, all operations will be done on this data. 
+
+
+\newpage
+
+# Part 2) Regression task
+
+In this section, we use the techniques learned in class to develop a model to predict ViolentCrimesPerPop using the 124 features (or some subset of them) stored in $\mathbf{X}$. We try several different methods, and use model selection methods to determine which model is best. We keep a held-out test set to evaluate the performance of our model.
+
+
+## Part 2.1) Train - Test - Validation Data Randomization
+
+In order to perform hyperparameter tuning within a model and model selecting, we will apply three-way hold-out method. Meaning, the data will be randomized into:
+
+- Train: 60% of the data
+- Validation: 20% of the data
+- Test: 20% of the data
+
+The train set will be used in two steps. The first step is to perform intial training and visualization. The next one is to perform k-folds cross validation for hyperparameter tuning. We will apply multiple regression algorithms and determine the best configuration (hyper parameters) for each of them
+
+The Validation set will be used for model selection. Meaning, we apply all of the algorithms in the previous step with theit optimal hyperparameters, then compare the result together to determine which one perform the best
+
+Finally, we take the winning model the regress it onto the test set. This is equivalent to proceed into production
+
+```{r}
+set.seed(seed)
+n <- nrow(X)
+indices <- 1:n
+
+# randomize 60% of the original data to be the train set
+train_indices <- sample(x = indices, size = round(.6*n))
+train_pcs <- PCs[train_indices, ]
+train_features <- X[train_indices, ]
+train_target <- y[train_indices]
+train_data <- data.frame(cbind(train_features, train_target))
+names(train_data)[ncol(train_data)] <- "LogViolentCrimesPerPop"
+
+# randomize 20% of the original data to be the validation test
+# (50% of the remaining data after sampling the train set)
+validation_indices <- sample(x = indices[-train_indices],
+                  size = round(.5*length(indices[-train_indices])))
+validation_pcs <- PCs[validation_indices, ]
+validation_features <- X[validation_indices, ]
+validation_target <- y[validation_indices]
+
+# use the rest of the data (20% of the original dataset) to be the final dataset
+test_indices <- sample(x = indices[c(-train_indices,
+                                     -validation_indices)])
+test_pcs <- PCs[test_indices, ]
+test_features <- X[test_indices, ]
+test_target <- y[test_indices]
+```
+
+\newpage
+
+## Part 2.2) Training Phase
+
+We take this step to give an overall view of each of the regression techniques  used in this project. We will fit the model, visualize the result. Some algorithms will involves regularization.
+
+### OLS Regression
+
+```{r}
+linear_model <- lm(formula = LogViolentCrimesPerPop ~ . ,
+                   data = train_data)
+```
+
+```{r, echo = F}
+plot(linear_model, which = 1)
+```
+
+The residuals vs fitted value plot above tests whether there is a linear relationship between features, and whether there is equal varianve across the regression line. The plot aboves shows that most data points are assymetrical around the 0 line, with the right tail being less densedn compared to the left one. However, there are outliers spotted. Hence, we conclude there is a weak linear relation between variables
+
+```{r}
+plot(linear_model, which = 2)
+```
+
+The QQ plot shown above helps us examine whether the actual distribution has the same shape as our theortical distribution. The data lies on QQ line mostly, which is consistent with our observation of gaussian from the historogram of log Crime Rate per Population. However, there are outliers exist at the two ends. We conclude the same as above
+
+### Principal Componant Regression (PCR)
+
+```{r, echo = FALSE, warning=F, message=F}
+library(pls)
+```
+
+
+## Part 2.3) Hyper Parameter Tuning
+
+### OLS Regression
+
+Due to the nature of OLS, we get exactly one solution. There is no hyperparameter tuning
+
+### Principal Componant Analysis: tune number of component
+
+```{r, echo = F, message=F, warning=F}
+library(plsdof)
+```
+
+We runs k-folds cross validation with k = 5 on hyperparameter m (number of principal componants) from 1 to 30. We will see what is the optimal number of PCs for our regression
+
+```{r}
+set.seed(seed)
+pcr_cv <- pcr.cv(train_features, train_target, k=num_folds,
+       m = 10, groups=NULL, scale=F, eps=0.000001,
+       plot.it = T)
+```
+
+
+```{r}
+(optimal_num_pc <- unname(which(pcr_cv$cv.error == min(pcr_cv$cv.error))-1))
+```
+
+As we see above, the number of principal component that leads to the minimal error is 10
+
+### Ridge Regression: tune Lambda term
+
+```{r, echo = F, message=F, warning=F}
+library( glmnet)
+```
+
+```{r}
+set.seed(seed)
+(ridge_cv <- cv.glmnet(x = train_features, y = train_target, alpha = 0,
+          nfolds = num_folds, parallel = T ))
+```
+
+```{r}
+(optimal_lambda_ridge <- ridge_cv$lambda.min)
+```
+ 
+### Lasso Regression: tune Lambda term
+
+```{r}
+set.seed(seed)
+(lasso_cv <- cv.glmnet(x = train_features, y = train_target, alpha = 1,
+          nfolds = num_folds, parallel = T ))
+```
+
+```{r}
+(optimal_lambda_lasso <- lasso_cv$lambda.min)
+```
+
+### K- Nearest Neighbors: tune number of neighbors
+```{r, echo = F, message=F, warning=F}
+library(caret)
+```
+
+```{r}
+set.seed(seed)
+
+train_control <- trainControl(method = "cv",
+                              number = num_folds)
+num_neighbors = 1:15
+
+tune_grid = expand.grid(k = num_neighbors)
+
+(knn_cv <- train(x = train_pcs, y = train_target, method = "knn", 
+      trControl = train_control, metric = "RMSE",
+      tuneGrid = tune_grid))
+```
+
+```{r}
+(temp <- knn_cv$results %>% filter(RMSE == min(RMSE)))
+
+optimal_num_neighbors <- temp[, "k"]
+
+optimal_rmse <- temp[, "RMSE"]
+```
+
+```{r, echo = F}
+ggplot(data = knn_cv$results) + 
+  geom_line(aes(x = k, y = RMSE), color = "steelblue4") + 
+  geom_point(aes(x = k, y = RMSE)) + 
+  geom_point(aes(x = optimal_num_neighbors, y = optimal_rmse), color = "red", size = 3) + 
+  scale_x_continuous(breaks = num_neighbors) +
+  labs(title = "Mean Square Error with Respect to Number of Neighbors",
+       x = "Number of Neighbors", y = "Mean Square Error")
+```
+
+### Decision Tree
+
+
+Method "rpart" is only capable of tuning the cp, method "rpart2" is used for maxdepth. There is no tuning for minsplit or any of the other rpart controls. If you want to tune on different options you can write a custom model to take this into account.
+
+Click here for more info on how to do this. Also read this answer about how to use the rpart control within the train function.
+
+```{r}
+train_control <- trainControl(method = "cv",
+                              number = num_folds)
+
+max_depth = 3:14
+
+tune_grid = expand.grid(maxdepth = max_depth)
+
+(tree_cv <- train(x = train_features, y = train_target, method = "rpart2", 
+      trControl = train_control, metric = "RMSE", tuneGrid = tune_grid))
+```
+
+```{r, echo = FALSE}
+(temp <- tree_cv$results %>% filter(RMSE == min(RMSE)))
+
+optimal_maxdepth <- temp[, "maxdepth"]
+
+optimal_rmse <- temp[, "RMSE"]
+```
+
+
+```{r, echo = F}
+ggplot(data = tree_cv$results) + 
+  geom_line(aes(x = maxdepth, y = RMSE), color = "steelblue4") + 
+  geom_point(aes(x = maxdepth, y = RMSE)) + 
+  geom_point(aes(x = optimal_maxdepth, y = optimal_rmse), color = "red", size = 3) + 
+  scale_x_continuous(breaks = max_depth) +
+  labs(title = "Mean Square Error with Respect to Maximum Depth",
+       x = "Max Depth of Tree", y = "Mean Square Error")
+```
+
+
+### Random Forest
+
+```{r}
+set.seed(seed)
+train_control <- trainControl(method = "cv",
+                              number = num_folds)
+
+sqrt_p <- round(sqrt(ncol(train_features)))
+mtry <- (sqrt_p - 2) : (sqrt_p + 2)
+tune_grid = expand.grid(mtry = mtry)
+
+(rf_cv <- train(x = train_features, y = train_target, method = "rf", 
+      trControl = train_control, metric = "RMSE",
+      tuneGrid = tune_grid))
+```
+
+```{r}
+(temp <- rf_cv$results %>% filter(RMSE == min(RMSE)))
+
+optimal_mtry<- temp[, "mtry"]
+
+optimal_rmse <- temp[, "RMSE"]
+```
+
+
+```{r, echo = F}
+ggplot(data = rf_cv$results) + 
+  geom_line(aes(x = mtry, y = RMSE), color = "steelblue4") + 
+  geom_point(aes(x = mtry, y = RMSE)) + 
+  geom_point(aes(x = optimal_mtry, y = optimal_rmse), color = "red", size = 3) + 
+  scale_x_continuous(breaks = mtry) +
+  labs(title = "Mean Square Error with Respect to Number of Features sampled",
+       x = "Number of Features", y = "Mean Square Error")
+```
+
+
+```{r}
+tune_grid = expand.grid(mtry = 12)
+
+for (num_tree in c(100, 500, 600)){
+ rf_cv_temp <- train(x = train_features, y =train_target,
+        method = "rf", metric = "RMSE",
+        tree = num_tree,
+        tuneGrid = tune_grid,
+        trControl = train_control)
+  
+  print(rf_cv_temp$results %>% filter(RMSE == min(RMSE)))
+
+}
+```
+
+
+## Part 2.4) Model Selection
+
+### OLS Regression
+
+```{r}
+lm_model <- lm(formula = LogViolentCrimesPerPop ~., data = train_data)
+lm_preds  <- predict(object = lm_model, newdata = data.frame(validation_features))
+lm_mse <- mean((lm_preds - validation_target)^2)
+```
+
+
+### Principal Componant Regression
+```{r, message=F, warning=F}
+library(pls)
+library(analogue)
+```
+
+```{r, echo=F}
+# pcr_model <- pcr(x = train_features, y = train_target, ncomp = optimal_num_pc) # library(analogue needed)
+# pcr_preds <- predict(object = pcr_model, newdata = validation_features, ncomp = optimal_num_pc)
+# pcr_mse <- mean((pcr_preds - validation_target)^2)
+# 
+# pcr_model <- pcr(X = train_features, y = train_target, scale = F, m = optimal_num_pc)
+# dim(pcr_model$coefficients)
+# dim(validation_features)
+# predict.pcr()
+```
+
+### Ridge Regression
+
+```{r}
+ridge_model <- glmnet(x = train_features, y = train_target,
+                      alpha = 0,lambda = optimal_lambda_ridge)
+ridge_preds <- predict(object = ridge_model, newx = validation_features)
+ridge_mse <- mean((ridge_preds - validation_target)^2)
+```
+
+### Lasso Regression
+```{r}
+lasso_model <- glmnet(x = train_features, y = train_target,
+                      alpha = 1, lambda = optimal_lambda_lasso)
+lasso_preds <- predict(object = lasso_model, newx = validation_features)
+lasso_mse <- mean((lasso_preds - validation_target)^2)
+```
+
+ ### K Nearest Neighbor Regression
+```{r, echo=F, error=F, message=F}
+library(FNN)
+```
+ 
+```{r}
+knn <- knn.reg(train = train_features, test = validation_features,
+        y = train_target, k = optimal_num_neighbors)
+knn_preds <- knn$pred
+knn_mse <- mean((knn_preds - validation_target)^2)
+```
+ 
+### Decision Tree
+```{r, echo = F}
+library(rpart)
+```
+
+```{r}
+tree_model <- rpart(formula = LogViolentCrimesPerPop~. , data = train_data,
+                    control = rpart.control(maxdepth = optimal_maxdepth) )
+tree_preds <- predict(object = tree_model, newdata = data.frame(validation_features))
+tree_mse <- mean((tree_preds - validation_target)^2)
+```
+ 
+### Random Forest
+
+```{r}
+train_control <- trainControl(method = "none")
+rf_model <- train(x = train_features, y = train_target,
+                  method = "rf", trControl = train_control)
+rf_preds <- predict(object = rf_model, newdata = validation_features)
+rf_mse <- mean((rf_preds - validation_target)^2)
+```
+
+### All Mean Square Error
+```{r, echo = F}
+(mse_df <- data.frame("Linear"= lm_mse,
+                      "Ridge" = ridge_mse, "Lasso" = lasso_mse,
+                      "KNN" = knn_mse, "Tree" = tree_mse, "RandomForest" = rf_mse))
+
+```
+
+
+
+```{r, echo = F}
+target_df <- data.frame("Target" = validation_target, "OLS" = lm_preds,
+                         "Ridge" = as.numeric(ridge_preds), "Lasso" = as.numeric(lasso_preds),
+                         "KNN" = knn_preds, "Tree" = tree_preds, "RandomForest" = rf_preds)
+
+```
+
+
+## Part 2.5) Final Model
+
+```{r}
+train_validation_features <- rbind(train_features, validation_features)
+train_validation_target <- c(train_target, validation_target)
+```
+
+```{r}
+train_control <- trainControl(method = "none")
+rf_final_model <- train(x = train_validation_features, y = train_validation_target,
+                  method = "rf", trControl = train_control)
+rf_preds <- predict(object = rf_final_model, newdata = test_features)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
