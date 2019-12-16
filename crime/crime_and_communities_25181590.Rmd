@@ -1,10 +1,8 @@
- ---
-title: "Crime and Communities"
+---
+title: "Crime and Community"
 output:
+  html_document: default
   pdf_document: default
-  html_notebook: default
-  html_document:
-    df_print: paged
 ---
 
 
@@ -35,7 +33,7 @@ X <- subset(CC, select = -c(ViolentCrimesPerPop))
 
 # Part 1) Dataset Exploration - Feature Creating and Engineering
 
-In this section, you should provide a thorough exploration of the features of the dataset. Things to keep in mind in this section include:
+In this section, we provide a thorough exploration of the features of the dataset.
 
 - Which variables are categorical versus numerical?
 - What are the general summary statistics of the data? How can these be visualized?
@@ -46,12 +44,14 @@ In this section, you should provide a thorough exploration of the features of th
 
 \newpage
 
-```{r}
+```{r, echo = F, warning=F, message=F}
 library(dplyr)
 ```
 
 
 ## Missing Data Processing
+
+The first and foremost of any data science project should be missing value handling. This is a common issue since missing value almost always exist in the process of data sampling. There are more than one way to fill in the mssing value. For example, using mean or median of the feature. However, such practice is reasonable if and only if the missing portion is not high and systematic (data in one groups of related features has high missing rate). In the coming up processes, we are assessing features with high missing rate and remove them before any further work.
 
 check if target y contains missing data
 ```{r}
@@ -64,6 +64,7 @@ any(is.na(X))
 ```
 
 Now, as we have detected that there exist feature(s) in X that contain NA, the next step is to find and remove features with high proportion of NA (50% or above) and remove them all together before process those that have an acceptable number of NA
+
 ```{r}
 get_na_perc <- function(x, n){
   return(sum(is.na(x))/n)
@@ -88,7 +89,8 @@ X <- X %>% dplyr::select(-feature_high_na)
 ```
 
 
-Now that we have only feature with none or a low number of NA left, let's replace the mising values with the median
+Now that we have only feature with none or a low number of NA left, let's replace the mising values with the median, and check for missing data again
+
 ```{r}
 X <- X %>% mutate_all(function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x))
 any(is.na(X))
@@ -140,6 +142,7 @@ summary_stat <- function(features, selection){
 summary_stat(X, interesting_features)
 ```
 
+From the summary, it is easy to spot the difference in unit and range of these chosen features. In one the next step, we will scale the data in order to remove the unit affect. Before that, let's visualize some features to see if there is any pattern.
 
 \newpage
 
@@ -167,6 +170,8 @@ ggplot(data = temp_df) +
   ggtitle("Crime Rate with respect to Unemployment rate and Single Parent Family Rate")
 ```
 
+As you can see on the plot above, crime rate tends to be higher for area with higher unemployment rate and high single parent rate. However, to our surprised, the areas with the highest unemployment rate do not neccessarily have high crime rate. The three areas with highest unemployment rate have noticeably low crime rate. This interesting finding is contrast to our presumtion when starting the project. That is, high unemployment is an indicattor for high crime rate. In fact, in this visualization, single parent household rate is a much stronger indicator since almost all area with the high rate of single parent family also have higher crime.
+
 \newpage
 
 ```{r, echo=F}
@@ -176,14 +181,13 @@ ggplot(data = temp_df) +
   ggtitle("Crime Rate with respect to Poverty")
 ```
 
-As we can see, there is a correlation between crime and poverty as well as crime and unemployment. However, these relartionship are not exactly linear.
+We plot another plot for crime rate with respect to poverty. Just like the previous plot, higher poverty tend to have higher crime. However, the collections of points (areas) with highest poverty rate have pretty low crime rate. We hope to find out more.
 
 \newpage
 
-
 ## Data Normalization - Scaling
 
-After the previous step of examination, it is obvious that many features are different in nature. For example, some feautures are Percentage (PctForeignBorn, PctBornSameState). Some are counts (NumInShelters, population). Some are in US Dollars (MedRent, ...). Each of the features have different range, scale, and unit. Such condition will affect how much each of the feature influence the predition later on .Therefore, it is highly crucial that we normalize the features.
+As mentioned, after the previous step of examination, it is obvious that many features are different in nature. For example, some feautures are Percentage (PctForeignBorn, PctBornSameState). Some are counts (NumInShelters, population). Some are in US Dollars (MedRent, ...). Each of the features have different range, scale, and unit. Such condition will affect how much each of the feature influence the predition later on .Therefore, it is highly crucial that we normalize the features.
 
 ```{r}
 X <- scale(X)
@@ -243,7 +247,6 @@ With the given information above we can choose the number of component based on:
 
 ```{r, echo = FALSE}
 p <- PCA(X[, 1:10], graph = F)
-# p <- PCA(X, graph = F)
 plot(p,choix="var",new.plot=FALSE)
 ```
 
@@ -546,6 +549,8 @@ for (num_tree in c(100, 500, 600)){
 
 ## Part 2.4) Model Selection
 
+This step comes after we have determined the optinal hyperparameter for each model from the previous step. Now, we will let chem compete to see which of the optimized models will come out with lowest mean square error. The models will train on train set (the 60% of the data we use above), and test on validation set. At the end of this part, we will show all mean square errors against each other. 
+
 ### OLS Regression
 
 ```{r}
@@ -562,10 +567,10 @@ library(analogue)
 ```
 
 ```{r, echo=F}
-# pcr_model <- pcr(x = train_features, y = train_target, ncomp = optimal_num_pc) # library(analogue needed)
-# pcr_preds <- predict(object = pcr_model, newdata = validation_features, ncomp = optimal_num_pc)
-# pcr_mse <- mean((pcr_preds - validation_target)^2)
-# 
+pcr_model <- pcr(x = train_features, y = train_target, ncomp = optimal_num_pc) # library(analogue needed)
+pcr_preds <- predict(object = pcr_model, newdata = validation_features, ncomp = optimal_num_pc)
+pcr_mse <- mean((pcr_preds - validation_target)^2)
+
 # pcr_model <- pcr(X = train_features, y = train_target, scale = F, m = optimal_num_pc)
 # dim(pcr_model$coefficients)
 # dim(validation_features)
@@ -616,6 +621,7 @@ tree_mse <- mean((tree_preds - validation_target)^2)
 ### Random Forest
 
 ```{r}
+set.seed(seed)
 train_control <- trainControl(method = "none")
 rf_model <- train(x = train_features, y = train_target,
                   method = "rf", trControl = train_control)
@@ -625,23 +631,22 @@ rf_mse <- mean((rf_preds - validation_target)^2)
 
 ### All Mean Square Error
 ```{r, echo = F}
-(mse_df <- data.frame("Linear"= lm_mse,
+(mse_df <- data.frame("Linear"= lm_mse, "PCR" = pcr_mse,
                       "Ridge" = ridge_mse, "Lasso" = lasso_mse,
                       "KNN" = knn_mse, "Tree" = tree_mse, "RandomForest" = rf_mse))
 
 ```
 
+Random Forest consistenlt comes out as the winner. 
 
-
-```{r, echo = F}
-target_df <- data.frame("Target" = validation_target, "OLS" = lm_preds,
-                         "Ridge" = as.numeric(ridge_preds), "Lasso" = as.numeric(lasso_preds),
-                         "KNN" = knn_preds, "Tree" = tree_preds, "RandomForest" = rf_preds)
-
-```
+In addition, R informed us that the prediction from OLS is misleading due to the rank deficiency of the data after we have thrown out some high NA feature. Hence, we will not consider it. Also, We learn that the two regularization models, Ridge, Lasso, has performed much better than K Nearest Neighbor, Tree and Principal Component Regression. We believe this is due to the fact that Ridge and Lasso penlize overfitting using lambda terms. Hence, its performance will be better at generalization
+ 
+Lastly, we also see that the distiction in performance is not significantly high. An interesting future step for this project might be to run hypothesis testing to confirm this observation. For now, the next step would be to asses performance of the winning model
 
 
 ## Part 2.5) Final Model
+
+Now we, random forest will train on the combination of validation set (80% of the data), and test on test set (the other 20% of the data). This is our final assesment before deployment.
 
 ```{r}
 train_validation_features <- rbind(train_features, validation_features)
@@ -649,13 +654,50 @@ train_validation_target <- c(train_target, validation_target)
 ```
 
 ```{r}
+set.seed(seed)
 train_control <- trainControl(method = "none")
-rf_final_model <- train(x = train_validation_features, y = train_validation_target,
+rf_model <- train(x = train_validation_features, y = train_validation_target,
                   method = "rf", trControl = train_control)
-rf_preds <- predict(object = rf_final_model, newdata = test_features)
+rf_preds <- predict(object = rf_model, newdata = test_features)
+(rf_mse <- mean((rf_preds - test_target)^2))
+```
+
+## Part 2.6) Final
+
+We will train with the original features and target (100% of the data). The model will not be evaluated any further. This step is equivalent to deployment into production
+
+```{r}
+set.seed(seed)
+train_control <- trainControl(method = "none")
+final_model <- train(x = X, y = y,
+                  method = "rf", trControl = train_control)
+final_model
 ```
 
 
+## Part 2.7) Conclusion and Future Step
+
+For the purpose of this project, we are finished at the previous step.So far, we have follow the proper learning process starting from data preprocessing and feature engineering, to training and model selection, and finally to deployment with our most robust model - Random Forest. However, we would like to take a minute and think. What elst can be done?
+
+- Should we actually use all of the features in our models. Granted, we did reduce dimentionality with PC, but for other model, do we need to use the entire feature set (less those that are removed due to high NA)? We suggest we can consider doing feature selection to better our prediction. Some methods are backward and forward elimination.
+
+- Moreover, we are dealing with Violent Crime. From a social policy stand point, how meaningful is it to predict a numerical value of crime rate in an area. Crime, is essentially a social issue, and as future statisticians/data scientists, we are obliged to explore if there is another approach to tackle this issue instead just predit out a number. One of the idea is to transform this project from regression into classification. We can predict wether an area has crime rate above or below the median. In addition, it is now even more meaningful to use a decision tree to make such predict. We will be able to inteprete the result and easily trace out what factor is correllated to high crime rate as you can see below. We now trade off the good low variance from random forest to gain interpetability, but we think this will be helpful.
+
+```{r}
+y <- exp(y)
+y_classes <- cut(x = y, breaks = c(0, median(y), Inf), labels = c("below", "above"))
+dat <- cbind(data.frame(X), data.frame(y_classes))
+names(dat)[ncol(dat)] <- "Class"
+```
+
+```{r}
+library(rpart.plot)
+tree_model <- rpart(formula = Class~. , data = dat,
+                    control = rpart.control(maxdepth = optimal_maxdepth) )
+rpart.plot(tree_model)
+```
+
+- In conclusion, this topic is a complicated and delicate one. Hence, it deserves in-depth examination from expert in the field of Social Welfare, Sociology, Economics, etc, but we agree that using the power of machine learning can greatly enhance the learning process to tackle the issue.
 
 
 
