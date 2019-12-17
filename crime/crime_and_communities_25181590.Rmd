@@ -250,6 +250,7 @@ p <- PCA(X[, 1:10], graph = F)
 plot(p,choix="var",new.plot=FALSE)
 ```
 
+The vairiable factor map above represents the correlation between the first two dimensionalities and the first 10 features. For example, PC1 corellates almost perfectly to houshold size, PC2 corellates almost perfectly to racepcblack.
 
 ```{r}
 # names(PCs) # "coord"   "cor"     "cos2"    "contrib"
@@ -333,9 +334,7 @@ test_target <- y[test_indices]
 
 \newpage
 
-## Part 2.2) Training Phase
-
-We take this step to give an overall view of each of the regression techniques  used in this project. We will fit the model, visualize the result. Some algorithms will involves regularization.
+## Part 2.2) Training and Hyperparameter Tuning
 
 ### OLS Regression
 
@@ -356,20 +355,9 @@ plot(linear_model, which = 2)
 
 The QQ plot shown above helps us examine whether the actual distribution has the same shape as our theortical distribution. The data lies on QQ line mostly, which is consistent with our observation of gaussian from the historogram of log Crime Rate per Population. However, there are outliers exist at the two ends. We conclude the same as above
 
-### Principal Componant Regression (PCR)
-
-```{r, echo = FALSE, warning=F, message=F}
-library(pls)
-```
-
-
-## Part 2.3) Hyper Parameter Tuning
-
-### OLS Regression
-
 Due to the nature of OLS, we get exactly one solution. There is no hyperparameter tuning
 
-### Principal Componant Analysis: tune number of component
+### Principal Componant Regression: tune number of component
 
 ```{r, echo = F, message=F, warning=F}
 library(plsdof)
@@ -397,6 +385,8 @@ As we see above, the number of principal component that leads to the minimal err
 library( glmnet)
 ```
 
+For both of the two regularization method, Ridge, Lasso, we tune the lambda term $\lambda$ (the prior undertainty of the model parameter). To take full advantage of glmnet library, we shall use cv.glmnet to work out the optimized $\lambda$. Only the best $\lambda$ will be shown after the process of cross validation on the train set
+
 ```{r}
 set.seed(seed)
 (ridge_cv <- cv.glmnet(x = train_features, y = train_target, alpha = 0,
@@ -423,6 +413,10 @@ set.seed(seed)
 ```{r, echo = F, message=F, warning=F}
 library(caret)
 ```
+
+When it comes to using nearest neighbors, we choose to work on the Principal Componant instead of the original data. The reason is because The Curse of High Dimensionality, we will need an astronomical number of points to ensure a algorithm works.
+
+With regards to tunung, as the name nearest neighbor suggest, we choose to tune for the optimal number of neighbors. Higher number of neighbors has higher bias, but better robustness in the presence of outliers.
 
 ```{r}
 set.seed(seed)
@@ -456,12 +450,11 @@ ggplot(data = knn_cv$results) +
        x = "Number of Neighbors", y = "Mean Square Error")
 ```
 
+Consitently, the optimal number of neighbors is either the highest or very close to highest.
+
 ### Decision Tree
 
-
-Method "rpart" is only capable of tuning the cp, method "rpart2" is used for maxdepth. There is no tuning for minsplit or any of the other rpart controls. If you want to tune on different options you can write a custom model to take this into account.
-
-Click here for more info on how to do this. Also read this answer about how to use the rpart control within the train function.
+For decision tree, we firest aim to tune maximum number of split. However, the package rpart suggest we tune for maximum depth of tree, which has the same affect as tuning number of split.
 
 ```{r}
 train_control <- trainControl(method = "cv",
@@ -494,8 +487,11 @@ ggplot(data = tree_cv$results) +
        x = "Max Depth of Tree", y = "Mean Square Error")
 ```
 
+In the plot above, the optimal depth is usually the middle point of the range we tune
 
-### Random Forest
+### Random Forest: tune number of features randomized, number of trees
+
+In random forest, the first hyperparameter we should consider is the number of features to be randomly select for each iteration. Due to the extreme computation cost of random forest, we will be more conservative when select the values to tune. In this case, that is $\sqrt{p}\pm2$
 
 ```{r}
 set.seed(seed)
@@ -520,6 +516,7 @@ optimal_rmse <- temp[, "RMSE"]
 ```
 
 
+
 ```{r, echo = F}
 ggplot(data = rf_cv$results) + 
   geom_line(aes(x = mtry, y = RMSE), color = "steelblue4") + 
@@ -530,6 +527,9 @@ ggplot(data = rf_cv$results) +
        x = "Number of Features", y = "Mean Square Error")
 ```
 
+The plot above thow the optimal number of features to be select. However, the difference is indeed very subtle. We rerun the process multiple times with different seed and even when the optimal points change this subtlety persist. We can say that any number of feature around $\sqrt{p}$ is already a good one.
+
+After tuning the number of features to be randomized, we move on to tune number of trees in each forest. Here we try 100 trees, 500 trees (default of caret), and 600 trees.
 
 ```{r}
 tune_grid = expand.grid(mtry = 12)
@@ -546,8 +546,10 @@ for (num_tree in c(100, 500, 600)){
 }
 ```
 
+As you can see in the RSME above, the difference between RSMEs that result from different number of trees is insignificant. According to our research, performance of random forest is a monotonic function with respect to the number of trees. This function will become plateau as the number of trees become sufficient. In order words, as long as we use a sufficient number of trees, the performance will reach its optimal point.
 
-## Part 2.4) Model Selection
+
+## Part 2.3) Model Selection
 
 This step comes after we have determined the optinal hyperparameter for each model from the previous step. Now, we will let chem compete to see which of the optimized models will come out with lowest mean square error. The models will train on train set (the 60% of the data we use above), and test on validation set. At the end of this part, we will show all mean square errors against each other. 
 
@@ -644,7 +646,7 @@ In addition, R informed us that the prediction from OLS is misleading due to the
 Lastly, we also see that the distiction in performance is not significantly high. An interesting future step for this project might be to run hypothesis testing to confirm this observation. For now, the next step would be to asses performance of the winning model
 
 
-## Part 2.5) Final Model
+## Part 2.4) Final Model
 
 Now we, random forest will train on the combination of validation set (80% of the data), and test on test set (the other 20% of the data). This is our final assesment before deployment.
 
@@ -681,7 +683,7 @@ For the purpose of this project, we are finished at the previous step.So far, we
 
 - Should we actually use all of the features in our models. Granted, we did reduce dimentionality with PC, but for other model, do we need to use the entire feature set (less those that are removed due to high NA)? We suggest we can consider doing feature selection to better our prediction. Some methods are backward and forward elimination.
 
-- Moreover, we are dealing with Violent Crime. From a social policy stand point, how meaningful is it to predict a numerical value of crime rate in an area. Crime, is essentially a social issue, and as future statisticians/data scientists, we are obliged to explore if there is another approach to tackle this issue instead just predit out a number. One of the idea is to transform this project from regression into classification. We can predict wether an area has crime rate above or below the median. In addition, it is now even more meaningful to use a decision tree to make such predict. We will be able to inteprete the result and easily trace out what factor is correllated to high crime rate as you can see below. We now trade off the good low variance from random forest to gain interpetability, but we think this will be helpful.
+- Moreover, we are dealing with Violent Crime. From a social policy stand point, how meaningful is it to predict a numerical value of crime rate in an area? Crime, is essentially a social issue, and as future statisticians/data scientists, we are obliged to explore if there is another approach to tackle this issue instead just predit out a number. One of the idea is to transform this project from regression into classification. We can predict wether an area has crime rate above or below the median. In addition, it is now even more meaningful to use a decision tree to make such predict. We will be able to inteprete the result and easily trace out what factor is correllated to high crime rate as you can see below. We now trade off the good low variance from random forest to gain interpetability, but we think this will be helpful.
 
 ```{r}
 y <- exp(y)
