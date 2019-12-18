@@ -1,9 +1,9 @@
 ---
 title: "Fashion MNIST"
 output:
-  pdf_document: default
-  html_notebook: default
   html_document: default
+  html_notebook: default
+  pdf_document: default
 ---
 
 
@@ -64,7 +64,7 @@ pca <- PCA(X.centered ,scale.unit = FALSE, graph = FALSE,ncp = 200)
 ```
 
 Using the the principal components and the loading vectors we can recover low-dimensional versions of the orginal pictures. This is done by using that 
-$\mathbf{Z_k} = \mathbf{X}\mathbf{V_k} \Rightarrow \mathbf{Z_k}\mathbf{V_k}^\top \approx \mathbf{X} $
+$Z_k = XV_k \Rightarrow Z_kV_k^\top \approx X$
 
 where $k$ is the number of retained principal components.
 
@@ -190,11 +190,13 @@ val_idx.3 <- row.names(Xy.3) %in% subset(val_idx, val_idx %in% row.names(Xy.3))
 
 ```
 
-We start with Linear Discriminant (LDA) analysis. Simply put LDA  works by assuming that all the covariates are drawn from different gaussian distribution depending on their class. Using the gaussian assumption we can estimate the parameters of the distribution, and thereby recover an estimated density function $f_k(x)$. Using the estimated density and Bayes theorem one can then calculate the posterior density, i.e. the probability that an observation belongs to a specific class conditional on the control variables, $Pr(y=k,X=x) = \frac{\pi_k f_k(x)}{\sum^K_{j=1}\pi_l f_l(x)}$, where $\pi_k$ is the prior density, which is simply estimated as the proportion of each class in the sample. From the Bayes Classifier, we know that the class with the highest posterior probability is the best prediction, and that is how the actual class prediction is done. The difference between LDA and QDA, is that for LDA you assume a common covariance structure across classes and only different means, while QDA allows for different covariance structures for each class. LDA is therefore less flexible, which of course results in higher bias but lower variance. Which one is prefered depends on the given setting.  For LDA we use the `lda()` function which is part of the MASS library.
+#### LDA
+
+We start with Linear Discriminant (LDA) analysis. Simply put LDA  works by assuming that all the covariates are drawn from different gaussian distribution depending on their class. Using the gaussian assumption we can estimate the parameters of the distribution, and thereby recover an estimated density function $$f_k(x)$$. Using the estimated density and Bayes theorem one can then calculate the posterior density, i.e. the probability that an observation belongs to a specific class conditional on the control variables, $$Pr(y=k,X=x) = \frac{\pi_k f_k(x)}{\sum^K_{j=1}\pi_l f_l(x)}$$, where$$pi_k$$ is the prior density, which is simply estimated as the proportion of each class in the sample. From the Bayes Classifier, we know that the class with the highest posterior probability is the best prediction, and that is how the actual class prediction is done. The difference between LDA and QDA, is that for LDA you assume a common covariance structure across classes and only different means, while QDA allows for different covariance structures for each class. LDA is therefore less flexible, which of course results in higher bias but lower variance. Which one is prefered depends on the given setting.  For LDA we use the `lda()` function which is part of the MASS library.
 
 Since some of the pixels are constant for all pictures in Case 3, I temporarily remove them. This changes nothing as the dont contain information relevant for Case 3, and does not put lda at a disadvatange.
 
-```{r LDA}
+```{r LDA, warning=FALSE}
 library(MASS)
 
 # Case 1: 0 vs. 1
@@ -229,12 +231,14 @@ error_rate.lda.3 <- 1 - (sum(diag(confusion.lda.3)) / sum(val_idx.3))
 
 ```
 
-K-Nearest Neighbor (KNN), is a very simple method, which can be seen as an extremely non-parametric estimation of the posterior probabilities of each class. Given a test observation it simply find the K training observations that are nearest in the covariate space given a specified metric, and calculates the posterior probablity as the proportions of each class. Like Bayes' classifier it then predicts the class with the highest probability. KNN depends on two decision made by the researcher: The metric used and the number of neighborghs included. Most of the time euclidian distance is used, but depending one the data other norms might be more relevant. The most important parameter is the number of neighbor, K, as it decides how flexible or rigid the method is. It can range from $k=1$, which is so flexible that it perfectly fits the training sample, to $k=n$ which simply amount to predicting the class with the highest frequency in the sample.  The choice of k, is clearly a classic bias-variance tradeoff, and we choose to find the optimal k, using 5-fold cross-validation. Since KNN generally has poor performance in high-dimensional problems, we will use the PCs recovered in the first part, as predictors. The amount of PCs to include will be decided based on 5-fold cross-validation. The range used for k is 1-10, and the range for PC is 2-20 with step size 2. This results in 10x10 grid of parameter settings among which to decide which is best.
+#### KNN
+
+K-Nearest Neighbor (KNN), is a very simple method, which can be seen as an extremely non-parametric estimation of the posterior probabilities of each class. Given a test observation it simply find the K training observations that are nearest in the covariate space given a specified metric, and calculates the posterior probablity as the proportions of each class. Like Bayes' classifier it then predicts the class with the highest probability. KNN depends on two decision made by the researcher: The metric used and the number of neighborghs included. Most of the time euclidian distance is used, but depending one the data other norms might be more relevant. The most important parameter is the number of neighbor, K, as it decides how flexible or rigid the method is. It can range from $$k=1$$, which is so flexible that it perfectly fits the training sample, to $$k=n$$ which simply amount to predicting the class with the highest frequency in the sample.  The choice of k, is clearly a classic bias-variance tradeoff, and we choose to find the optimal k, using 5-fold cross-validation. Since KNN generally has poor performance in high-dimensional problems, we will use the PCs recovered in the first part, as predictors. The amount of PCs to include will be decided based on 5-fold cross-validation. The range used for k is 1-10, and the range for PC is 2-20 with step size 2. This results in 10x10 grid of parameter settings among which to decide which is best.
 
 The function used is `knn` from the `class` package.
 
 ```{r KNN CV}
-
+knitr::opts_chunk$set(cache = TRUE)
 #### WARNING: This is computationally heavy and will take along time
 library(class)
 
@@ -326,10 +330,12 @@ error_rate.knn.3 <- 1 - (sum(diag(confusion.knn.3)) / sum(val_idx.3))
 
 ```
 
-We then turn to logistic regression. It models the probability of being class $y$ conditional on $X$, as a logitstic function of a linear combination of the features, $p(y=1|X=x)=\phi(\beta^\top x_i)$. These probabilities are used to create a likelyhood function $\prod_\limits{i=1}^n\phi(\beta^\top x_i)^{y_i}(1-\phi(\beta^\top x_i))^{1-y_i}$. One can then use gradient decent to maximize the log-likelihood function to find the optimal weights. Often LDA and logistic regression performs similar as they both create linear decision boundaries. However, if the gaussian asumption made when using LDA does not hold, logistic regression will tend to perfom better (ISL p. 151). The opposite is true if the assumption approximately holds. To perfom logistic regression we use the `glm` function.
+#### Logistic Regression
 
-```{r log}
+We then turn to logistic regression. It models the probability of being class $$y$$ conditional on $$X$$, as a logitstic function of a linear combination of the features, $$p(y=1|X=x)=\phi(\beta^\top x_i)$$. These probabilities are used to create a likelyhood function $$\prod_{i=1}^n\phi(\beta^\top x_i)^{y_i}(1-\phi(\beta^\top x_i))^{1-y_i}$$. One can then use gradient decent to maximize the log-likelihood function to find the optimal weights. Often LDA and logistic regression performs similar as they both create linear decision boundaries. However, if the gaussian asumption made when using LDA does not hold, logistic regression will tend to perfom better (ISL p. 151). The opposite is true if the assumption approximately holds. To perfom logistic regression we use the `glm` function.
 
+```{r log, warning=FALSE}
+knitr::opts_chunk$set(cache = TRUE)
 # Case 1: 0 vs. 1
 # Estimating logistic model
 log.1 <- glm(y~.,data=Xy.1,subset = train_idx.1,family = binomial, maxit = 100)
@@ -359,12 +365,15 @@ error_rate.log.3 <- 1 - (sum(diag(confusion.log.3)) / sum(val_idx.3))
 
 ```
 
+#### Random Forest
+
 When using Random Forest one creates $B$ new samples of data using bootstrapping of the original data and then fits a decision tree to each one. In addition to the randomness induced by the different bootstrap samples, one tries to uncorrelate the trees even more, by restricting the number of features considered at each node-split to a small subsample of the features, usually $\sqrt{p}$ features. By making the trees less correlated, Random Forest becomes a method that has the same low bias of the decision trees, but has a much lower variance, since the average of 50 or 500 trees varies less from the mean hypothesis than a single tree does. Another benifit of this method, and bagging in general, is that one can use the so called "Out-of-bag" error as an estimate for the Test MSE. This means that one can use the entire sample for training. However, for this exercise we will use the same training sample for all the methods and and estimate the Test and Validation MSE using the hold-out method, in addition to reporting th out-of-bag error.
 
 
-For Random Forest and use the `randomForest` package. The number of features considered at each split is set at the default $\sqrt{p}$, which has been shown to be the theoretical optimal. Each random forest consists of 500 trees.
+For Random Forest and use the `randomForest` package. The number of features considered at each split is set at the default $$\sqrt{p}$$, which has been shown to be the theoretical optimal. Each random forest consists of 500 trees.
 
 ```{r Random Forest}
+knitr::opts_chunk$set(cache = TRUE)
 library(randomForest)
 set.seed(1)
 
@@ -497,6 +506,7 @@ train_val_idx.3 <- train_idx.3|val_idx.3
 We then fit a random forest model for Case 1 and estimate the out-of-sample error rate using the test set.
 
 ```{r}
+knitr::opts_chunk$set(cache = TRUE)
 #Case 1:
 
 # Estimating Random forest model
@@ -513,6 +523,7 @@ error_rate.test.1 <- 1 - (sum(diag(confusion.test.1)) / sum(test_idx.1))
 We then use cross validation to find the new optimal parameters for the KNN models for Case 2 and 3:
 
 ```{r}
+knitr::opts_chunk$set(cache = TRUE)
 # Cross validation for Case 2 and 3:
 
 # We first find the optimal numbers of neighbors using 5-fold crossvailidation.
@@ -580,7 +591,7 @@ After determining the new optimal parameters, we then estimate the out-of-sample
 pred.knn.test.2 <- knn(Zy.2[train_val_idx.2,1:(par.opt.2[1,2]*2)],Zy.2[test_idx.2,1:(par.opt.2[1,2]*2)],Zy.2[train_val_idx.2,"y"],k=par.opt.2[1,1])
 
 confusion.test.2 <- table(obs = Zy.2[test_idx.2,"y"], pred = pred.knn.test.2)
-error_rate.test.2 <- 1 - (sum(diag(confusion.knn.test.2)) / sum(test_idx.2))
+error_rate.test.2 <- 1 - (sum(diag(confusion.test.2)) / sum(test_idx.2))
 
 
 #Case 3:
@@ -588,7 +599,7 @@ error_rate.test.2 <- 1 - (sum(diag(confusion.knn.test.2)) / sum(test_idx.2))
 pred.knn.test.3 <- knn(Zy.3[train_val_idx.3,1:(par.opt.3[1,2]*2)],Zy.3[test_idx.3,1:(par.opt.3[1,2]*2)],Zy.3[train_val_idx.3,"y"],k=par.opt.3[1,1])
 
 confusion.test.3 <- table(obs = Zy.3[test_idx.3,"y"], pred = pred.knn.test.3)
-error_rate.test.3<- 1 - (sum(diag(confusion.knn.test.3)) / sum(test_idx.3))
+error_rate.test.3<- 1 - (sum(diag(confusion.test.3)) / sum(test_idx.3))
 
 ```
 
@@ -611,6 +622,11 @@ confusion.test.3
 
 The Estimated out-of-sample error for Case 1 using Random Forest is 0.6 pct. For Case 2 and 3 the estimated error rate for the KNN models using the test data is 0.04 pct. In the confusion matrices we see that both the KNN models only has one error. Overall the final test performance for the prefered methods is really good, but the error rate in Case 1 is more than ten times higher than the other two cases.
 
+### Deployment
+
+Final step would be to fit the three prefered models to 100 pct. of their corresponding subsets (Training, validation and Test), ie. the entire dataset. It would then be ready for deployment.
+
+
 This concludes the binary classification tasks.
 
 ## Multiclass classification
@@ -621,7 +637,11 @@ In this section, you will develop a model to classify all three classes simultan
 
 For multiclass classification we will use most of the methods from the binary task as they easily allow for multible classes. However, we will not use Logistic Regression even though it performs multiclass problems, as this has not been covered in the course. All the methods have already been described when performing binary classification.
 
+
+#### LDA
+
 We start with Linear Discriminant (LDA) analysis. 
+
 ```{r LDA mul}
 library(MASS)
 # Estimating LDA model and performing prediction
@@ -634,10 +654,12 @@ error_rate.lda.mul <- 1 - (sum(diag(confusion.lda.mul)) / length(test_idx))
 
 ```
 
+#### KNN
+
 We then estimate the KNN model. Again we use PCs as predictors and perfrom 5-fold cross-validation to determine the optimal number of neigbors and PCs used.
 
 ```{r KNN mul}
-
+knitr::opts_chunk$set(cache = TRUE)
 library(class)
 
 # We first find the optimal numbers of neighbors using 5-fold crossvailidation.
@@ -690,8 +712,11 @@ error_rate.knn.mul <- 1 - (sum(diag(confusion.knn.mul)) / length(y[val_idx]))
 
 ```
 
-We then estimate a Random Forest model, using the same setting as for the binary classification task: $\sqrt{p}$ feauteres considered each split, and 500 trees. We then calculate the confusion matrix and error rate for the validation set. 
+#### Random Forest
+
+We then estimate a Random Forest model, using the same setting as for the binary classification task: $$\sqrt{p}$$ feauteres considered each split, and 500 trees. We then calculate the confusion matrix and error rate for the validation set. 
 ```{r Random Forest mul}
+knitr::opts_chunk$set(cache = TRUE)
 library(randomForest)
 #### WARNING: This is computationally heavy and will take along time
 set.seed(1)
@@ -749,6 +774,19 @@ error_rate.test.mul <- 1 - (sum(diag(confusion.test.mul)) / length(test_idx))
 
 error_rate.test.mul
 confusion.test.mul
+```
+### Deployment
+
+The final step is to fit the Random Forest model to the entire dataset. It would then be ready for deployment.
+
+
+```{r deployment mul}
+knitr::opts_chunk$set(cache = TRUE)
+#### WARNING: This is computationally heavy and will take along time
+
+# Fitting final model
+rf.mul.final <- randomForest(y~.,Xy)
+
 ```
 
 ## Side Question:
